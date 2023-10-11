@@ -3,5 +3,7 @@
   "analytics": false,
   "resolvers": [
     "bower-shrinkwrap-resolver-ext"
-  ]
+  ],
+  "strict-ssl": false,
+  "https-proxy": ""
 }
