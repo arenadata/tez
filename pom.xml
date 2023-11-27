@@ -71,6 +71,7 @@
         <maven-checkstyle-plugin.version>3.1.1</maven-checkstyle-plugin.version>
     <checkstyle.version>8.35</checkstyle.version>
     <dependency-check-maven.version>1.3.6</dependency-check-maven.version>
+    <cyclonedx.maven.plugin.version>2.7.9</cyclonedx.maven.plugin.version>
     <test.build.data>${project.build.directory}/tmp</test.build.data>
   </properties>
   <scm>
@@ -1297,6 +1298,45 @@
           <version>${hadoop.version}</version>
         </dependency>
       </dependencies>
+    </profile>
+    <profile>
+      <id>cyclonedx</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.cyclonedx</groupId>
+            <artifactId>cyclonedx-maven-plugin</artifactId>
+            <version>${cyclonedx.maven.plugin.version}</version>
+            <inherited>false</inherited>
+            <executions>
+              <execution>
+                <id>cyclonedx-aggregate</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>makeAggregateBom</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <projectType>library</projectType>
+              <schemaVersion>1.4</schemaVersion>
+              <includeBomSerialNumber>true</includeBomSerialNumber>
+              <includeCompileScope>true</includeCompileScope>
+              <includeProvidedScope>true</includeProvidedScope>
+              <includeRuntimeScope>true</includeRuntimeScope>
+              <includeSystemScope>true</includeSystemScope>
+              <includeTestScope>false</includeTestScope>
+              <includeLicenseText>false</includeLicenseText>
+              <outputReactorProjects>false</outputReactorProjects>
+              <outputFormat>all</outputFormat>
+              <outputName>CycloneDX-Sbom-${project.artifactId}-${project.version}</outputName>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
   </profiles>
 
