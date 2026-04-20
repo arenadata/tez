@@ -914,7 +914,7 @@ public class TestGroupedSplits {
       int nodeId = Character.getNumericValue(loc.charAt(loc.length() - 1));
       assertTrue(nodeId < 4);
       assertTrue(loc.startsWith("node") && loc.length() == 5);
-      assertEquals(2, entry.getValue().getValue());
+      assertEquals(2, entry.getValue().getValue().intValue());
     }
   }
 

@@ -24,7 +24,7 @@
   <groupId>org.apache.tez</groupId>
   <artifactId>tez</artifactId>
   <packaging>pom</packaging>
-  <version>0.10.5</version>
+  <version>0.10.5.1-4.3.0-0</version>
   <name>tez</name>
 
   <licenses>
@@ -72,8 +72,8 @@
     <dependency-check-maven.version>3.2.0</dependency-check-maven.version>
     <findbugs-maven-plugin.version>3.0.5</findbugs-maven-plugin.version>
     <frontend-maven-plugin.version>1.15.0</frontend-maven-plugin.version>
-    <guava.version>32.0.1-jre</guava.version>
-    <hadoop.version>3.4.3</hadoop.version>
+    <guava.version>33.5.0-jre</guava.version>
+    <hadoop.version>3.4.3.1-4.3.0-0</hadoop.version>
     <jdk.tools.version>1.8</jdk.tools.version>
     <jersey.version>1.19.4</jersey.version>
     <jettison.version>1.5.4</jettison.version>
@@ -88,9 +88,9 @@
     <maven-site-plugin.version>3.12.1</maven-site-plugin.version>
     <metrics-core.version>3.1.0</metrics-core.version>
     <mockito-core.version>4.3.1</mockito-core.version>
-    <netty.version>4.1.130.Final</netty.version>
+    <netty.version>4.1.131.Final</netty.version>
     <pig.version>0.13.0</pig.version>
-    <protobuf.version>3.25.5</protobuf.version>
+    <protobuf.version>3.25.9</protobuf.version>
     <protoc-jar-maven-plugin.version>3.11.4</protoc-jar-maven-plugin.version>
     <protoc.path>${env.PROTOC_PATH}</protoc.path>
     <restrict-imports.enforcer.version>2.0.0</restrict-imports.enforcer.version>
@@ -925,7 +925,15 @@
             <forkCount>1</forkCount>
             <reuseForks>false</reuseForks>
             <forkedProcessTimeoutInSeconds>900</forkedProcessTimeoutInSeconds>
-            <argLine>-Xmx1024m -XX:+HeapDumpOnOutOfMemoryError</argLine>
+            <argLine>
+              -Xmx1024m
+              -XX:+HeapDumpOnOutOfMemoryError
+              -XX:+EnableDynamicAgentLoading
+              --add-opens=java.base/java.lang=ALL-UNNAMED
+              --add-opens=java.base/java.util=ALL-UNNAMED
+              --add-opens=java.base/java.io=ALL-UNNAMED
+              -Dnet.bytebuddy.experimental=true
+            </argLine>
             <environmentVariables>
               <JAVA_HOME>${java.home}</JAVA_HOME>
               <MALLOC_ARENA_MAX>4</MALLOC_ARENA_MAX>
