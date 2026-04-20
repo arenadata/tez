@@ -396,8 +396,7 @@ public class TezConfiguration extends Configuration {
   @ConfigurationProperty
   public static final String TEZ_AM_LAUNCH_CLUSTER_DEFAULT_CMD_OPTS =
       TEZ_AM_PREFIX + "launch.cluster-default.cmd-opts";
-  public static final String TEZ_AM_LAUNCH_CLUSTER_DEFAULT_CMD_OPTS_DEFAULT =
-      "-server -Djava.net.preferIPv4Stack=true -Dhadoop.metrics.log.level=WARN";
+  public static final String TEZ_AM_LAUNCH_CLUSTER_DEFAULT_CMD_OPTS_DEFAULT;
 
   /**
    * String value. Command line options provided during the launch of the Tez
@@ -423,8 +422,7 @@ public class TezConfiguration extends Configuration {
   @ConfigurationProperty
   public static final String TEZ_TASK_LAUNCH_CLUSTER_DEFAULT_CMD_OPTS =
       TEZ_TASK_PREFIX + "launch.cluster-default.cmd-opts";
-  public static final String TEZ_TASK_LAUNCH_CLUSTER_DEFAULT_CMD_OPTS_DEFAULT =
-      "-server -Djava.net.preferIPv4Stack=true -Dhadoop.metrics.log.level=WARN";
+  public static final String TEZ_TASK_LAUNCH_CLUSTER_DEFAULT_CMD_OPTS_DEFAULT;
 
   /**
    * String value. Command line options provided during the launch of Tez Task
@@ -441,7 +439,19 @@ public class TezConfiguration extends Configuration {
       "-verbose:gc -Xlog:gc*,safepoint::time,uptime -XX:+UseNUMA -XX:+UseParallelGC";
   public static final String TEZ_TASK_LAUNCH_CMD_OPTS_DEFAULT;
 
+  private static final String CLUSTER_DEFAULT_BASE_OPTS =
+      "-server -Djava.net.preferIPv4Stack=true -Dhadoop.metrics.log.level=WARN";
+  private static final String JDK9_ADD_OPENS =
+      " --add-opens=java.base/java.lang=ALL-UNNAMED"
+      + " --add-opens=java.base/java.lang.reflect=ALL-UNNAMED"
+      + " --add-opens=java.base/java.util=ALL-UNNAMED"
+      + " --add-opens=java.base/java.io=ALL-UNNAMED";
+
   static {
+    String jdk9ExtraOpts = TezCommonUtils.getJavaVersion() >= 9 ? JDK9_ADD_OPENS : "";
+    TEZ_AM_LAUNCH_CLUSTER_DEFAULT_CMD_OPTS_DEFAULT = CLUSTER_DEFAULT_BASE_OPTS + jdk9ExtraOpts;
+    TEZ_TASK_LAUNCH_CLUSTER_DEFAULT_CMD_OPTS_DEFAULT = CLUSTER_DEFAULT_BASE_OPTS + jdk9ExtraOpts;
+
     if (TezCommonUtils.getJavaVersion() >= 9) {
       TEZ_AM_LAUNCH_CMD_OPTS_DEFAULT = TEZ_AM_LAUNCH_CMD_OPTS_JDK9_DEFAULT;
       TEZ_TASK_LAUNCH_CMD_OPTS_DEFAULT = TEZ_TASK_LAUNCH_CMD_OPTS_JDK9_DEFAULT;

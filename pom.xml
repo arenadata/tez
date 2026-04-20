@@ -110,9 +110,9 @@
 
   <distributionManagement>
     <repository>
-      <id>${distMgmtStagingId}</id>
-      <name>${distMgmtStagingName}</name>
-      <url>${distMgmtStagingUrl}</url>
+      <id>github</id>
+      <name>GitHub arenadata Apache Maven Packages</name>
+      <url>https://maven.pkg.github.com/arenadata/tez</url>
     </repository>
     <snapshotRepository>
       <id>${distMgmtSnapshotsId}</id>
@@ -126,6 +126,10 @@
   </distributionManagement>
 
   <repositories>
+    <repository>
+      <id>arenadata</id>
+      <url>https://maven.pkg.github.com/arenadata/*</url>
+    </repository>
     <repository>
       <id>${distMgmtSnapshotsId}</id>
       <name>${distMgmtSnapshotsName}</name>
@@ -785,7 +789,17 @@
         <artifactId>jersey-json</artifactId>
         <version>${jersey.version}</version>
       </dependency>
-      <!-- BouncyCastle should be in default scope to make their way to tez.tar.gz since Hadoop 3.4.1 -->
+      <dependency>
+        <groupId>com.github.pjfanning</groupId>
+        <artifactId>jersey-json</artifactId>
+        <version>1.22.0</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.eclipse.persistence</groupId>
+            <artifactId>org.eclipse.persistence.moxy</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
       <dependency>
         <groupId>org.bouncycastle</groupId>
         <artifactId>bcprov-jdk18on</artifactId>

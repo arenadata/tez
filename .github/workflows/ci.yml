@@ -1,0 +1,129 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: CI
+
+on:
+  push:
+    branches: ['develop/**', 'release/**']
+  pull_request:
+    branches: ['develop/**', 'release/**']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MAVEN_ARGS: -B -V -e -ntp
+
+jobs:
+  compile:
+    name: Compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-java@v4
+      with:
+        java-version: 21
+        distribution: temurin
+        cache: maven
+        server-id: arenadata
+        server-username: GITHUB_ACTOR
+        server-password: GITHUB_TOKEN
+    - name: Compile
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: >-
+        mvn ${{ env.MAVEN_ARGS }} install -DskipTests
+        -Dmaven.javadoc.skip=true
+    - name: Save m2 repository
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.m2/repository
+        key: m2-${{ github.sha }}
+
+  test:
+    name: "${{ matrix.name }}"
+    needs: compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Unit & Module Tests
+            modules: hadoop-shim,tez-api,tez-common,tez-runtime-internals,tez-runtime-library,tez-mapreduce,tez-dag,tez-plugins/tez-protobuf-history-plugin,tez-plugins/tez-yarn-timeline-history,tez-plugins/tez-yarn-timeline-history-with-acls,tez-plugins/tez-yarn-timeline-history-with-fs,tez-plugins/tez-yarn-timeline-cache-plugin,tez-plugins/tez-history-parser,tez-tools/analyzers/job-analyzer
+            timeout: 60
+
+          - name: Integration - Jobs
+            modules: tez-tests
+            tests: "TestTezJobs,TestMRRJobs,TestMRRJobsDAGApi,TestAM"
+            timeout: 60
+
+          - name: Integration - Recovery
+            modules: tez-tests
+            tests: "TestRecovery,TestAMRecovery,TestAMRecoveryAggregationBroadcast,TestDAGRecovery,TestDAGRecovery2"
+            timeout: 60
+
+          - name: Integration - Fault & Shuffle
+            modules: tez-tests
+            tests: "TestFaultTolerance,TestExceptionPropagation,TestPipelinedShuffle,TestSecureShuffle"
+            timeout: 60
+
+          - name: Integration - Local mode & Misc
+            modules: tez-tests
+            tests: "TestLocalMode,TestTaskErrorsUsingLocalMode,TestDriver,TestInput,TestOutput,TestProcessor,TestMiniTezCluster"
+            timeout: 30
+
+          - name: Integration - Other (new tests)
+            modules: tez-tests
+            tests: "!TestTezJobs,!TestMRRJobs,!TestMRRJobsDAGApi,!TestAM,!TestRecovery,!TestAMRecovery,!TestAMRecoveryAggregationBroadcast,!TestDAGRecovery,!TestDAGRecovery2,!TestFaultTolerance,!TestExceptionPropagation,!TestPipelinedShuffle,!TestSecureShuffle,!TestLocalMode,!TestTaskErrorsUsingLocalMode,!TestDriver,!TestInput,!TestOutput,!TestProcessor,!TestMiniTezCluster"
+            timeout: 45
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-java@v4
+      with:
+        java-version: 21
+        distribution: temurin
+        server-id: arenadata
+        server-username: GITHUB_ACTOR
+        server-password: GITHUB_TOKEN
+    - name: Restore m2 repository
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.m2/repository
+        key: m2-${{ github.sha }}
+    - name: Run tests
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: >-
+        mvn ${{ env.MAVEN_ARGS }} test
+        -pl ${{ matrix.modules }}
+        ${{ matrix.tests && format('-Dtest={0}', matrix.tests) || '' }}
+        -Dmaven.javadoc.skip=true
+        -Dsurefire.rerunFailingTestsCount=2
+        -Dmaven.test.failure.ignore=false
+        -fae
+    - name: Upload surefire reports
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: surefire-${{ matrix.name }}
+        path: '**/target/surefire-reports/'
+        if-no-files-found: ignore
