@@ -20,7 +20,7 @@ package org.apache.tez.test;
 
 import org.apache.tez.common.Preconditions;
 import com.google.common.collect.Sets;
-import org.apache.commons.lang.RandomStringUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;

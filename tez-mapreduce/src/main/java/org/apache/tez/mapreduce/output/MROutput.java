@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import org.apache.tez.common.Preconditions;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.mapreduce.lib.output.LazyOutputFormat;
 import org.apache.tez.mapreduce.common.Utils;
 import org.apache.tez.runtime.library.api.IOInterruptedException;

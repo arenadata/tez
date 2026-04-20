@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.google.protobuf.ByteString;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.tez.dag.app.dag.impl.ImmediateStartVertexManager;
 import org.apache.tez.dag.app.dag.impl.OneToOneEdgeManagerOnDemand;
 import org.apache.tez.dag.app.dag.impl.RootInputVertexManager;

@@ -19,7 +19,7 @@
 package org.apache.tez.runtime.library.common.sort.impl;
 
 import com.google.common.collect.Maps;
-import org.apache.commons.lang.RandomStringUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.FileSystem;

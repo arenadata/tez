@@ -66,7 +66,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import com.google.protobuf.ByteString;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.yarn.api.records.LocalResource;
 import org.apache.tez.common.DrainDispatcher;

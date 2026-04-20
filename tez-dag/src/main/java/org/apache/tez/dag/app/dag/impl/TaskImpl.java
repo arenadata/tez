@@ -36,8 +36,8 @@ import org.apache.tez.common.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Maps;
 
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.exception.ExceptionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.tez.dag.app.dag.event.TaskEventTAFailed;
 import org.apache.tez.dag.records.TaskAttemptTerminationCause;
