@@ -50,15 +50,15 @@ test('Default value test', function(assert) {
   let bars = this.$().find(".sub-groups").find(".bar");
   assert.equal(bars.length, 9);
 
-  assert.equal(bars[0].style.width, 0);
-  assert.equal(bars[1].style.width, 0);
-  assert.equal(bars[2].style.width, 0);
-  assert.equal(bars[3].style.width, 0);
-  assert.equal(bars[4].style.width, 0);
-  assert.equal(bars[5].style.width, 0);
-  assert.equal(bars[6].style.width, 0);
-  assert.equal(bars[7].style.width, 0);
-  assert.equal(bars[8].style.width, 0);
+  assert.equal(bars[0].style.width, "0%");
+  assert.equal(bars[1].style.width, "0%");
+  assert.equal(bars[2].style.width, "0%");
+  assert.equal(bars[3].style.width, "0%");
+  assert.equal(bars[4].style.width, "0%");
+  assert.equal(bars[5].style.width, "0%");
+  assert.equal(bars[6].style.width, "0%");
+  assert.equal(bars[7].style.width, "0%");
+  assert.equal(bars[8].style.width, "0%");
 });
 
 test('alignBars test', function(assert) {
@@ -153,6 +153,27 @@ test('alignBars - without RenameOrMoveFiles test', function(assert) {
   assertWidth(bars[6], 80);
   assertWidth(bars[7], 90);
   assertWidth(bars[8], 0);
+});
+
+test('alignBars updates on perf change test', function(assert) {
+  var bars;
+
+  this.set("perf", {
+    "TezRunDag": 10
+  });
+  this.render(hbs`{{query-timeline perf=perf}}`);
+
+  bars = this.$().find(".sub-groups").find(".bar");
+  assert.equal(parseFloat(bars[5].style.width), 100);
+
+  this.set("perf", {
+    "compile": 10,
+    "TezRunDag": 30
+  });
+
+  bars = this.$().find(".sub-groups").find(".bar");
+  assert.equal(parseFloat(bars[0].style.width), 25);
+  assert.equal(parseFloat(bars[5].style.width), 75);
 });
 
 test('tables test', function(assert) {

@@ -47,6 +47,18 @@ function getStatus(source) {
   }
 }
 
+function normalizePerf(perf) {
+  if(typeof perf === "string") {
+    perf = JSON.parse(perf);
+  }
+
+  if(perf && perf["PostHook.org.apache.hadoop.hive.ql.hooks.ATSHook"] !== undefined) {
+    perf["PostATSHook"] = perf["PostHook.org.apache.hadoop.hive.ql.hooks.ATSHook"];
+  }
+
+  return perf;
+}
+
 export default TimelineSerializer.extend({
   maps: {
     queryText: 'otherinfo.QUERY.queryText',
@@ -101,9 +113,7 @@ export default TimelineSerializer.extend({
 
     if(perf) {
       try{
-        let PERF = JSON.parse(perf);
-        PERF["PostATSHook"] = PERF["PostHook.org.apache.hadoop.hive.ql.hooks.ATSHook"];
-        data.otherinfo.PERF = PERF;
+        data.otherinfo.PERF = normalizePerf(perf);
       }catch(e){}
     }
 

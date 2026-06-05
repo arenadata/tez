@@ -18,13 +18,31 @@
 
 import Entity from './entity';
 
+function getHiveQueryID(dag) {
+  var callerType = dag.get("callerType"),
+      callerID = dag.get("callerID"),
+      dagName = dag.get("name") || "",
+      hiveQueryID,
+      delimiterIndex;
+
+  if(callerID && (callerType === "HIVE_QUERY_ID" || (!callerType && callerID.indexOf("hive_") === 0))) {
+    hiveQueryID = callerID;
+  }
+
+  if(!hiveQueryID) {
+    delimiterIndex = dagName.indexOf(":");
+    hiveQueryID = delimiterIndex > 0 ? dagName.substr(0, delimiterIndex) : undefined;
+  }
+
+  return hiveQueryID;
+}
+
 export default Entity.extend({
   queryRecord: function (loader, id, options, query, urlParams) {
     return this._super(loader, id, options, query, urlParams).then(function (dag) {
       if(dag.get("callerDescription") === undefined) {
-        var dagName = dag.get("name") || "",
-            hiveQueryID = dagName.substr(0, dagName.indexOf(":"));
-        if(hiveQueryID && dagName !== hiveQueryID) {
+        var hiveQueryID = getHiveQueryID(dag);
+        if(hiveQueryID) {
           loader.queryRecord("hive-query", hiveQueryID, options, query, urlParams).then(function (hive) {
             dag.setProperties({
               callerContext: "Hive",

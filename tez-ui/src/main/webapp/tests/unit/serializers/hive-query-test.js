@@ -103,3 +103,61 @@ test('extractAttributes test', function(assert) {
   assert.equal(testData.primaryfilters.tablesread.message, "None");
   assert.equal(testData.primaryfilters.tableswritten.message, "None");
 });
+
+test('extractAttributes parses PERF test', function(assert) {
+  let serializer = this.subject(),
+      testPerf = {
+        serializePlan: 32,
+        runTasks: 11921,
+        RenameOrMoveFiles: 3
+      },
+      testData = {
+        otherinfo: {
+          PERF: JSON.stringify(testPerf),
+          HIVE_ADDRESS: "1.2.3.4"
+        }
+      },
+      modelClass = {
+        eachAttribute: function (callback) {
+          callback("perf", {type: "object"});
+        },
+        eachRelationship: Ember.K,
+        eachTransformedAttribute: Ember.K
+      },
+      attributes;
+
+  attributes = serializer.extractAttributes(modelClass, {
+    data: testData
+  });
+
+  assert.deepEqual(attributes.perf, testPerf);
+  assert.deepEqual(testData.otherinfo.PERF, testPerf);
+});
+
+test('extractAttributes accepts object PERF test', function(assert) {
+  let serializer = this.subject(),
+      testPerf = {
+        "PostHook.org.apache.hadoop.hive.ql.hooks.ATSHook": 7,
+        RenameOrMoveFiles: 3
+      },
+      testData = {
+        otherinfo: {
+          PERF: testPerf,
+          HIVE_ADDRESS: "1.2.3.4"
+        }
+      },
+      modelClass = {
+        eachAttribute: function (callback) {
+          callback("perf", {type: "object"});
+        },
+        eachRelationship: Ember.K,
+        eachTransformedAttribute: Ember.K
+      },
+      attributes;
+
+  attributes = serializer.extractAttributes(modelClass, {
+    data: testData
+  });
+
+  assert.equal(attributes.perf.PostATSHook, 7);
+});

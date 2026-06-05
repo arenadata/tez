@@ -195,6 +195,21 @@ test('normalizeResourceHash test', function(assert) {
   assert.equal(data.callerData.callerDescription, callerInfo.description);
   assert.notOk(data.callerData.callerType);
 
+  // otherinfo fallback test
+  data = serializer.normalizeResourceHash({
+    data: {
+      otherinfo: {
+        callerContext: callerInfo.context,
+        callerDescription: callerInfo.description,
+        callerType: callerInfo.callerType
+      }
+    }
+  }).data;
+
+  assert.equal(data.callerData.callerContext, callerInfo.context);
+  assert.equal(data.callerData.callerDescription, callerInfo.description);
+  assert.equal(data.callerData.callerType, callerInfo.callerType);
+
   // dagContext have presidence over dagInfo
   data = serializer.normalizeResourceHash({
     data: {

@@ -67,6 +67,46 @@ test('queryRecord-Hive:No description test', function(assert) {
   });
 });
 
+test('queryRecord-Hive:Caller ID test', function(assert) {
+  let testQuery = "testQuery",
+      entityName = "entity-name",
+      queryID = "hive_20260605101338_9f86cd47-0b71-44a5-85ca-514e33031dec",
+      testDag = Ember.Object.create({
+        name: "insert into test_table1 values (10) (Stage-1)",
+        callerID: queryID,
+        callerType: "HIVE_QUERY_ID"
+      }),
+      hiveQuery = Ember.Object.create({
+        queryText: testQuery
+      }),
+      store = {
+        queryRecord: function (name) {
+          assert.equal(name, entityName);
+          return Ember.RSVP.resolve(testDag);
+        }
+      },
+      loader = Ember.Object.create({
+        nameSpace: "ns",
+        queryRecord: function (type, id/*, options, query, urlParams*/) {
+          assert.equal(type, "hive-query");
+          assert.equal(id, queryID);
+          return Ember.RSVP.resolve(hiveQuery);
+        }
+      }),
+      entity = this.subject({
+        name: entityName,
+        store: store
+      });
+
+  assert.expect(1 + 2 + 3);
+
+  entity.queryRecord(loader).then(function (dag) {
+    assert.equal(testDag, dag);
+    assert.equal(testDag.get("callerContext"), "Hive");
+    assert.equal(testDag.get("callerDescription"), testQuery);
+  });
+});
+
 test('queryRecord-Not Hive:No description test', function(assert) {
   let testQuery = "testQuery",
       entityName = "entity-name",

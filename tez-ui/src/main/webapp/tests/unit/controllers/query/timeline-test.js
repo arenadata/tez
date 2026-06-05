@@ -61,3 +61,114 @@ test('rows test', function(assert) {
   assert.equal(rows[2].perfLogName, "z");
   assert.equal(rows[2].perfLogValue, 3);
 });
+
+test('timelinePerf uses Hive perf when available test', function(assert) {
+  let perf = {
+        TezRunDag: 10
+      },
+      controller = this.subject({
+        send: Ember.K,
+        initVisibleColumns: Ember.K,
+        model: {
+          status: "RUNNING",
+          perf: perf,
+          dag: Ember.A([Ember.Object.create({
+            status: "RUNNING",
+            startTime: 100,
+            endTime: 500
+          })])
+        }
+      });
+
+  assert.equal(controller.get("timelinePerf"), perf);
+});
+
+test('timelinePerf derives running DAG runtime test', function(assert) {
+  let controller = this.subject({
+    send: Ember.K,
+    initVisibleColumns: Ember.K,
+    model: {
+      status: "RUNNING",
+      dag: Ember.A([Ember.Object.create({
+        status: "RUNNING",
+        startTime: 100,
+        endTime: 500
+      })])
+    }
+  });
+
+  assert.deepEqual(controller.get("timelinePerf"), {
+    TezRunDag: 400
+  });
+  assert.equal(controller.get("hasTimeline"), true);
+});
+
+test('timelinePerf derives sequential multi-DAG runtime test', function(assert) {
+  let controller = this.subject({
+    send: Ember.K,
+    initVisibleColumns: Ember.K,
+    model: {
+      status: "RUNNING",
+      dag: Ember.A([
+        Ember.Object.create({
+          status: "SUCCEEDED",
+          startTime: 100,
+          endTime: 300
+        }),
+        Ember.Object.create({
+          status: "RUNNING",
+          startTime: 500,
+          endTime: 800
+        })
+      ])
+    }
+  });
+
+  assert.deepEqual(controller.get("timelinePerf"), {
+    TezRunDag: 500
+  });
+});
+
+test('timelinePerf merges overlapping multi-DAG runtime intervals test', function(assert) {
+  let controller = this.subject({
+    send: Ember.K,
+    initVisibleColumns: Ember.K,
+    model: {
+      status: "RUNNING",
+      dag: Ember.A([
+        Ember.Object.create({
+          status: "SUCCEEDED",
+          startTime: 100,
+          endTime: 400
+        }),
+        Ember.Object.create({
+          status: "RUNNING",
+          startTime: 300,
+          endTime: 600
+        })
+      ])
+    }
+  });
+
+  assert.deepEqual(controller.get("timelinePerf"), {
+    TezRunDag: 500
+  });
+});
+
+test('timelinePerf unavailable for completed query without perf test', function(assert) {
+  let controller = this.subject({
+    send: Ember.K,
+    initVisibleColumns: Ember.K,
+    model: {
+      status: "SUCCEEDED",
+      dag: Ember.A([Ember.Object.create({
+        status: "SUCCEEDED",
+        startTime: 100,
+        endTime: 500
+      })])
+    }
+  });
+
+  assert.equal(controller.get("timelinePerf"), null);
+  assert.equal(controller.get("hasTimeline"), false);
+});

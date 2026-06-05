@@ -23,6 +23,54 @@ import ColumnDefinition from '../../utils/column-definition';
 
 var MoreObject = more.Object;
 
+function toArray(records) {
+  var result = [];
+
+  if(!records) {
+    return result;
+  }
+
+  if(records.forEach) {
+    records.forEach(function (record) {
+      if(record) {
+        result.push(record);
+      }
+    });
+  }
+  else {
+    result.push(records);
+  }
+
+  return result;
+}
+
+function getMergedIntervalsDuration(intervals) {
+  var duration = 0,
+      current;
+
+  intervals = intervals.sort(function (left, right) {
+    return left[0] - right[0];
+  });
+
+  intervals.forEach(function (interval) {
+    if(!current || interval[0] > current[1]) {
+      if(current) {
+        duration += current[1] - current[0];
+      }
+      current = interval.slice();
+    }
+    else {
+      current[1] = Math.max(current[1], interval[1]);
+    }
+  });
+
+  if(current) {
+    duration += current[1] - current[0];
+  }
+
+  return duration;
+}
+
 export default TableController.extend({
 
   columns: ColumnDefinition.make([{
@@ -38,8 +86,61 @@ export default TableController.extend({
     }
   }]),
 
-  rows: Ember.computed("model.perf", function () {
-    var perf = this.get("model.perf"),
+  timelinePerf: Ember.computed(
+    "model.perf",
+    "model.status",
+    "model.loadTime",
+    "model.dag.[]",
+    "model.dag.@each.status",
+    "model.dag.@each.startTime",
+    "model.dag.@each.endTime",
+    "model.dag.@each.loadTime",
+    function () {
+      var perf = this.get("model.perf"),
+          dags = toArray(this.get("model.dag")),
+          intervals = [],
+          hasRunningDAG = false,
+          now = Date.now();
+
+      if(perf) {
+        return perf;
+      }
+
+      dags.forEach(function (dag) {
+        var dagStartTime = dag.get("startTime"),
+            dagEndTime = dag.get("endTime"),
+            dagStatus = dag.get("status");
+
+        if(dagStatus === "RUNNING") {
+          hasRunningDAG = true;
+          dagEndTime = dagEndTime || now;
+        }
+
+        if(dagStartTime && dagEndTime > dagStartTime) {
+          intervals.push([dagStartTime, dagEndTime]);
+        }
+      });
+
+      if(!intervals.length) {
+        return null;
+      }
+
+      if(this.get("model.status") !== "RUNNING" && !hasRunningDAG) {
+        return null;
+      }
+
+      return {
+        TezRunDag: getMergedIntervalsDuration(intervals)
+      };
+    }
+  ),
+
+  hasTimeline: Ember.computed("timelinePerf", function () {
+    return !!this.get("timelinePerf");
+  }),
+
+  rows: Ember.computed("timelinePerf", function () {
+    var perf = this.get("timelinePerf"),
         rows = [];
 
     if(perf) {

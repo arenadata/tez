@@ -18,8 +18,8 @@
 
 {{#if loaded}}
 
-  {{#if model.perf}}
-    {{query-timeline perf=model.perf}}
+  {{#if hasTimeline}}
+    {{query-timeline perf=timelinePerf}}
 
     {{em-table
     columns=columns

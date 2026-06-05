@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+import Ember from 'ember';
 import { moduleFor, test } from 'ember-qunit';
 
 moduleFor('route:query/configs', 'Unit | Route | query/configs', {
@@ -30,4 +31,30 @@ test('Basic creation test', function(assert) {
   assert.equal(route.get("loaderNamespace"), "query");
   assert.ok(route.get("setupController"));
   assert.ok(route.get("load"));
+});
+
+test('load demands dag need', function(assert) {
+  assert.expect(5);
+
+  let route = this.subject({
+    modelFor: function (name) {
+      assert.equal(name, "query");
+      return Ember.Object.create({
+        entityID: "query_1"
+      });
+    }
+  });
+
+  route.loader = {
+    queryRecord: function (type, id, options) {
+      assert.equal(type, "hive-query");
+      assert.equal(id, "query_1");
+      assert.equal(options.reload, true);
+      assert.deepEqual(options.demandNeeds, ["dag"]);
+    }
+  };
+
+  route.load(null, null, {
+    reload: true
+  });
 });

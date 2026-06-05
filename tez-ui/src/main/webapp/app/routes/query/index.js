@@ -17,9 +17,9 @@
  */
 
 import Ember from 'ember';
-import SingleAmPollsterRoute from '../single-am-pollster';
+import QueryAmPollsterRoute from '../query-am-pollster';
 
-export default SingleAmPollsterRoute.extend({
+export default QueryAmPollsterRoute.extend({
   title: "Query Details",
 
   loaderNamespace: "query",
@@ -30,6 +30,9 @@ export default SingleAmPollsterRoute.extend({
   },
 
   load: function (value, query, options) {
+    options = Ember.$.extend({}, options, {
+      demandNeeds: ["dag"]
+    });
     return this.get("loader").queryRecord('hive-query', this.modelFor("query").get("id"), options);
   },
 });

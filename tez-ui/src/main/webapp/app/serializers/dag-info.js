@@ -49,6 +49,10 @@ export default TimelineSerializer.extend({
       callerData.callerDescription = Ember.get(infoObj, "description") || Ember.get(dagInfo, "blob") || dagInfo;
     }
 
+    callerData.callerContext = callerData.callerContext || Ember.get(data, "otherinfo.callerContext");
+    callerData.callerDescription = callerData.callerDescription || Ember.get(data, "otherinfo.callerDescription");
+    callerData.callerType = callerData.callerType || Ember.get(data, "otherinfo.callerType");
+
     data.callerData = callerData;
 
     return resourceHash;

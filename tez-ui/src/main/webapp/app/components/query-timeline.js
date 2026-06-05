@@ -62,7 +62,7 @@ export default Ember.Component.extend({
       var width;
 
       bar = Ember.$(bar);
-      width = (Ember.get(perf, bar.attr("data")) / perf.total) * 100;
+      width = perf.total ? (Ember.get(perf, bar.attr("data")) / perf.total) * 100 : 0;
 
       bar.css({
         width: `${width}%`
@@ -70,10 +70,30 @@ export default Ember.Component.extend({
     });
   },
 
-  didInsertElement: Ember.observer("normalizePerf", function () {
+  alignPerfBars: function () {
+    var element;
+
+    if(this.get("isDestroying") || this.get("isDestroyed")) {
+      return;
+    }
+
+    element = this.$ && this.$();
+    if(!element) {
+      return;
+    }
+
     var perf = this.get("normalizedPerf");
 
-    this.alignBars(this.$().find(".sub-groups").find(".bar"), perf);
-    this.alignBars(this.$().find(".groups").find(".bar"), perf);
+    this.alignBars(element.find(".sub-groups").find(".bar"), perf);
+    this.alignBars(element.find(".groups").find(".bar"), perf);
+  },
+
+  didInsertElement: function () {
+    this._super();
+    this.alignPerfBars();
+  },
+
+  _normalizedPerfObserver: Ember.observer("normalizedPerf", function () {
+    this.alignPerfBars();
   })
 });

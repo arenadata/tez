@@ -218,39 +218,44 @@ export default Ember.Component.extend({
   scrollChangeActionObserver: Ember.observer("scrollChangeAction", "message", "showScrollShadow", function () {
     Ember.run.scheduleOnce('afterRender', this, function() {
       var addScrollListener = this.get("scrollChangeAction") || this.get("showScrollShadow"),
-          element = this.$().find(".table-body"),
+          element = this.get("element"),
           scrollValues = this.get("scrollValues");
 
-      if(addScrollListener && element) {
+      if(this.get("isDestroyed") || this.get("isDestroying") || !element) {
+        return;
+      }
+
+      element = Ember.$(element).find(".table-body");
+      if(element) {
+        element.off('scroll', HANDLERS.onScroll);
         element = element.get(0);
 
         clearInterval(this.get("_widthTrackerTimer"));
 
-        if(element) {
-          if(addScrollListener) {
-            Ember.$(element).on('scroll', this, HANDLERS.onScroll);
+        if(element && addScrollListener) {
+          Ember.$(element).on('scroll', this, HANDLERS.onScroll);
 
-            this.set("_widthTrackerTimer", setInterval(function () {
-              scrollValues.setProperties({
-                width: element.scrollWidth,
-                viewPortWidth: element.offsetWidth
-              });
-            }, 1000));
-          }
-          else {
-            element.off('scroll', HANDLERS.onScroll);
-          }
+          this.set("_widthTrackerTimer", setInterval(function () {
+            scrollValues.setProperties({
+              width: element.scrollWidth,
+              viewPortWidth: element.offsetWidth
+            });
+          }, 1000));
         }
       }
     });
   }),
 
   willDestroyElement: function () {
+    var element = this.get("element");
+
     this._super();
     clearInterval(this.get("_widthTrackerTimer"));
-    Ember.$(this.$().find(".table-body")).off();
-    Ember.$(this.$().find(".table-mid")).off();
-    Ember.$(this.$()).off();
+    if(element) {
+      Ember.$(element).find(".table-body").off();
+      Ember.$(element).find(".table-mid").off();
+      Ember.$(element).off();
+    }
   },
 
   actions: {
