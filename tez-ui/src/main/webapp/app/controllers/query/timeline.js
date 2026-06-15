@@ -89,6 +89,7 @@ export default TableController.extend({
   timelinePerf: Ember.computed(
     "model.perf",
     "model.status",
+    "model.startTime",
     "model.loadTime",
     "model.dag.[]",
     "model.dag.@each.status",
@@ -97,6 +98,7 @@ export default TableController.extend({
     "model.dag.@each.loadTime",
     function () {
       var perf = this.get("model.perf"),
+          queryStartTime = this.get("model.startTime"),
           dags = toArray(this.get("model.dag")),
           intervals = [],
           hasRunningDAG = false,
@@ -107,7 +109,7 @@ export default TableController.extend({
       }
 
       dags.forEach(function (dag) {
-        var dagStartTime = dag.get("startTime"),
+        var dagStartTime = dag.get("startTime") || queryStartTime,
             dagEndTime = dag.get("endTime"),
             dagStatus = dag.get("status");
 
