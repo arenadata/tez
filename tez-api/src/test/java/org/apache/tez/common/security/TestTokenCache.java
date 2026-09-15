@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -36,9 +37,12 @@ import org.apache.hadoop.fs.FilterFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.Credentials;
+import org.apache.hadoop.security.alias.CredentialProviderFactory;
+import org.apache.hadoop.security.alias.TokenIssuingCredentialProvider;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
+import org.apache.tez.dag.api.TezConfiguration;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -118,6 +122,101 @@ public class TestTokenCache {
     conf.set("tez.job.fs-servers.token-renewal.exclude", "dir");
     TokenCache.obtainTokensForFileSystemsInternal(creds, paths, conf);
     verify(TestFileSystem.fs, times(paths.length + 1)).addDelegationTokens(renewer, creds);
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProviders() throws Exception {
+    TokenIssuingCredentialProvider.ISSUED.set(0);
+    Configuration conf = new Configuration(TestTokenCache.conf);
+    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH,
+        "user:///,dtissuer://vault-a/,dtissuer://broken/");
+    Credentials creds = new Credentials();
+
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+
+    Assert.assertEquals(renewer, identifierOf(creds, "dtissuer://vault-a/"));
+    Assert.assertEquals(1, creds.numberOfTokens());
+
+    // A provider that already has a token in the credentials must not issue another one.
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+    Assert.assertEquals(1, TokenIssuingCredentialProvider.ISSUED.get());
+    Assert.assertEquals(1, creds.numberOfTokens());
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProvidersRenewalExcluded() throws Exception {
+    TokenIssuingCredentialProvider.ISSUED.set(0);
+    Configuration conf = new Configuration(TestTokenCache.conf);
+    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH,
+        "dtissuer://vault-a/, dtissuer://vault-b/");
+    conf.set(TezConfiguration.TEZ_JOB_CREDENTIAL_PROVIDERS_TOKEN_RENEWAL_EXCLUDE, "vault-b");
+    Credentials creds = new Credentials();
+
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+
+    Assert.assertEquals(renewer, identifierOf(creds, "dtissuer://vault-a/"));
+    // an excluded provider gets an empty renewer, which makes the RM skip renewal
+    Assert.assertEquals("", identifierOf(creds, "dtissuer://vault-b/"));
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProvidersWithoutRenewer() throws Exception {
+    TokenIssuingCredentialProvider.ISSUED.set(0);
+    Configuration conf = new Configuration();
+    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH, "dtissuer://vault-a/");
+    Credentials creds = new Credentials();
+
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+
+    Assert.assertEquals(0, TokenIssuingCredentialProvider.ISSUED.get());
+    Assert.assertEquals(0, creds.numberOfTokens());
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProvidersWhenProviderIsUnavailable() throws Exception {
+    TokenIssuingCredentialProvider.ISSUED.set(0);
+    UnavailableCredentialProvider.ATTEMPTS.set(0);
+    Configuration conf = new Configuration(TestTokenCache.conf);
+    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH,
+        "dtdown://vault-down/,dtissuer://vault-a/");
+    Credentials creds = new Credentials();
+
+    // a provider that cannot be reached must not fail the submission
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+
+    Assert.assertEquals(1, UnavailableCredentialProvider.ATTEMPTS.get());
+    Assert.assertNull(creds.getToken(new Text("dtdown://vault-down/")));
+    Assert.assertEquals(renewer, identifierOf(creds, "dtissuer://vault-a/"));
+    Assert.assertEquals(1, creds.numberOfTokens());
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProvidersWhenAllProvidersAreUnavailable()
+      throws Exception {
+    Configuration conf = new Configuration(TestTokenCache.conf);
+    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH, "dtdown://vault-down/");
+    UnavailableCredentialProvider.ATTEMPTS.set(0);
+    Credentials creds = new Credentials();
+
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+
+    Assert.assertEquals(1, UnavailableCredentialProvider.ATTEMPTS.get());
+    Assert.assertEquals(0, creds.numberOfTokens());
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProvidersWithoutProviders() throws Exception {
+    Credentials creds = new Credentials();
+
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, new Configuration());
+
+    Assert.assertEquals(0, creds.numberOfTokens());
+  }
+
+  private static String identifierOf(Credentials creds, String service) {
+    Token<?> token = creds.getToken(new Text(service));
+    Assert.assertNotNull("Token for " + service, token);
+    return new String(token.getIdentifier(), StandardCharsets.UTF_8);
   }
 
   private Path[] makePaths(int count, String prefix) throws Exception {

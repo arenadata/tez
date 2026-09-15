@@ -745,6 +745,8 @@ public final class TezClientUtils {
       }
       TokenCache.obtainTokensForFileSystems(credentials, ps, conf);
     }
+
+    TokenCache.obtainTokensForCredentialProviders(credentials, conf);
   }
 
   static DAGPlan prepareAndCreateDAGPlan(DAG dag, AMConfiguration amConfig,

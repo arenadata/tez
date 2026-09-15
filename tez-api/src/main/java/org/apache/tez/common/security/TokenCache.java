@@ -19,7 +19,11 @@
 package org.apache.tez.common.security;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -32,8 +36,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.alias.CredentialProviderFactory;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.tez.dag.api.TezConfiguration;
 
 
@@ -103,6 +109,104 @@ public final class TokenCache {
     }
   }
 
+  /**
+   * Obtain delegation tokens from the credential providers of
+   * {@code hadoop.security.credential.provider.path} that issue them, so tasks can read
+   * credentials without Kerberos credentials of their own. Providers that cannot be created
+   * or refuse a token are logged and skipped: the DAG may not need them. Providers listed in
+   * {@link TezConfiguration#TEZ_JOB_CREDENTIAL_PROVIDERS_TOKEN_RENEWAL_EXCLUDE} get a token
+   * with no renewer, which the RM leaves alone.
+   *
+   * @param credentials the credentials to add the tokens to
+   * @param conf configuration naming the providers
+   */
+  public static void obtainTokensForCredentialProviders(Credentials credentials,
+      Configuration conf) throws IOException {
+    if (!UserGroupInformation.isSecurityEnabled()) {
+      return;
+    }
+    obtainTokensForCredentialProvidersInternal(credentials, conf);
+  }
+
+  static void obtainTokensForCredentialProvidersInternal(Credentials credentials,
+      Configuration conf) throws IOException {
+    List<String> renewable = new ArrayList<>();
+    List<String> excluded = new ArrayList<>();
+    for (String path : conf.getStringCollection(
+        CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH)) {
+      String providerPath = path.trim();
+      if (providerPath.isEmpty()) {
+        continue;
+      }
+      if (isProviderTokenRenewalExcluded(providerPath, conf)) {
+        excluded.add(providerPath);
+      } else {
+        renewable.add(providerPath);
+      }
+    }
+    if (renewable.isEmpty() && excluded.isEmpty()) {
+      return;
+    }
+
+    // RM skips renewing token with empty renewer
+    int obtained = addCredentialProviderTokens(credentials, conf, excluded, "");
+    if (!renewable.isEmpty()) {
+      String delegTokenRenewer = getDelegationTokenRenewer(conf);
+      if (delegTokenRenewer == null) {
+        LOG.warn("Not obtaining delegation tokens from credential providers {}: {} is not set,"
+            + " so there is no principal to use as renewer", renewable,
+            YarnConfiguration.RM_PRINCIPAL);
+      } else {
+        obtained += addCredentialProviderTokens(credentials, conf, renewable, delegTokenRenewer);
+      }
+    }
+    if (obtained == 0) {
+      LOG.warn("Obtained no delegation token from credential providers {}; tasks relying on them"
+          + " will have no credentials of their own", conf.get(
+              CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH));
+    }
+  }
+
+  /**
+   * get delegation tokens from the credential providers of the given paths
+   * @return the number of tokens obtained
+   */
+  private static int addCredentialProviderTokens(Credentials credentials, Configuration conf,
+      List<String> providerPaths, String delegTokenRenewer) {
+    if (providerPaths.isEmpty()) {
+      return 0;
+    }
+    Configuration providerConf = new Configuration(conf);
+    providerConf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH,
+        String.join(",", providerPaths));
+    List<Token<?>> tokens = CredentialProviderFactory.addDelegationTokens(providerConf,
+        delegTokenRenewer, credentials);
+    for (Token<?> token : tokens) {
+      LOG.info("Got dt for {}; {}", token.getService(), token);
+    }
+    return tokens.size();
+  }
+
+  private static boolean isProviderTokenRenewalExcluded(String providerPath, Configuration conf) {
+    String[] hosts = conf.getStrings(
+        TezConfiguration.TEZ_JOB_CREDENTIAL_PROVIDERS_TOKEN_RENEWAL_EXCLUDE);
+    if (hosts == null) {
+      return false;
+    }
+    String host;
+    try {
+      host = new URI(providerPath).getHost();
+    } catch (URISyntaxException e) {
+      return false;
+    }
+    for (String excluded : hosts) {
+      if (excluded.equals(host)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   static boolean isTokenRenewalExcluded(FileSystem fs, Configuration conf) {
     String[] nns =
             conf.getStrings(TezConfiguration.TEZ_JOB_FS_SERVERS_TOKEN_RENEWAL_EXCLUDE);
@@ -126,8 +230,8 @@ public final class TokenCache {
     // RM skips renewing token with empty renewer
     String delegTokenRenewer = "";
     if (!isTokenRenewalExcluded(fs, conf)) {
-      delegTokenRenewer = Master.getMasterPrincipal(conf);
-      if (delegTokenRenewer == null || delegTokenRenewer.length() == 0) {
+      delegTokenRenewer = getDelegationTokenRenewer(conf);
+      if (delegTokenRenewer == null) {
         throw new IOException(
                 "Can't get Master Kerberos principal for use as renewer");
       }
@@ -140,6 +244,15 @@ public final class TokenCache {
         LOG.info("Got dt for " + fs.getUri() + "; "+token);
       }
     }
+  }
+
+  /**
+   * @return the principal to record as delegation token renewer, or null if the master
+   *     principal is not configured
+   */
+  private static String getDelegationTokenRenewer(Configuration conf) throws IOException {
+    String delegTokenRenewer = Master.getMasterPrincipal(conf);
+    return delegTokenRenewer == null || delegTokenRenewer.isEmpty() ? null : delegTokenRenewer;
   }
 
   private static final Text SESSION_TOKEN = new Text("SessionToken");
