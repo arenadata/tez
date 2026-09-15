@@ -32,6 +32,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.alias.CredentialProviderFactory;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.tez.dag.api.TezConfiguration;
@@ -100,6 +101,40 @@ public final class TokenCache {
     }
     for (FileSystem fs : fsSet) {
       obtainTokensForFileSystemsInternal(fs, credentials, conf);
+    }
+  }
+
+  /**
+   * Obtain delegation tokens from the credential providers of
+   * {@code hadoop.security.credential.provider.path} that issue them, so tasks can read
+   * credentials without Kerberos credentials of their own. Providers that cannot be created
+   * or refuse a token are logged and skipped: the DAG may not need them.
+   *
+   * @param credentials the credentials to add the tokens to
+   * @param conf configuration naming the providers
+   */
+  public static void obtainTokensForCredentialProviders(Credentials credentials,
+      Configuration conf) throws IOException {
+    if (!UserGroupInformation.isSecurityEnabled()) {
+      return;
+    }
+    obtainTokensForCredentialProvidersInternal(credentials, conf);
+  }
+
+  static void obtainTokensForCredentialProvidersInternal(Credentials credentials,
+      Configuration conf) throws IOException {
+    if (conf.getStringCollection(
+        CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH).isEmpty()) {
+      return;
+    }
+    String delegTokenRenewer = Master.getMasterPrincipal(conf);
+    if (delegTokenRenewer == null || delegTokenRenewer.length() == 0) {
+      throw new IOException(
+              "Can't get Master Kerberos principal for use as renewer");
+    }
+    for (Token<?> token : CredentialProviderFactory.addDelegationTokens(conf, delegTokenRenewer,
+        credentials)) {
+      LOG.info("Got dt for " + token.getService() + "; " + token);
     }
   }
 

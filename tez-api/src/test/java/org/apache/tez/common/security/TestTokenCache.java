@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -36,6 +37,8 @@ import org.apache.hadoop.fs.FilterFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.Credentials;
+import org.apache.hadoop.security.alias.CredentialProviderFactory;
+import org.apache.hadoop.security.alias.TokenIssuingCredentialProvider;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
@@ -118,6 +121,36 @@ public class TestTokenCache {
     conf.set("tez.job.fs-servers.token-renewal.exclude", "dir");
     TokenCache.obtainTokensForFileSystemsInternal(creds, paths, conf);
     verify(TestFileSystem.fs, times(paths.length + 1)).addDelegationTokens(renewer, creds);
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProviders() throws Exception {
+    TokenIssuingCredentialProvider.ISSUED.set(0);
+    Configuration conf = new Configuration(TestTokenCache.conf);
+    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH,
+        "user:///,dtissuer://vault-a/,dtissuer://broken/");
+    Credentials creds = new Credentials();
+
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+
+    Token<?> token = creds.getToken(new Text("dtissuer://vault-a/"));
+    Assert.assertNotNull("Token from the issuing provider", token);
+    Assert.assertEquals(renewer, new String(token.getIdentifier(), StandardCharsets.UTF_8));
+    Assert.assertEquals(1, creds.numberOfTokens());
+
+    // A provider that already has a token in the credentials must not issue another one.
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+    Assert.assertEquals(1, TokenIssuingCredentialProvider.ISSUED.get());
+    Assert.assertEquals(1, creds.numberOfTokens());
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProvidersWithoutProviders() throws Exception {
+    Credentials creds = new Credentials();
+
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, new Configuration());
+
+    Assert.assertEquals(0, creds.numberOfTokens());
   }
 
   private Path[] makePaths(int count, String prefix) throws Exception {
