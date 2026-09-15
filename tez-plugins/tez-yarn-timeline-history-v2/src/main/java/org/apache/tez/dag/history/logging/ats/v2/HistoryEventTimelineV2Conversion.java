@@ -82,9 +82,9 @@ import org.apache.tez.dag.records.TezVertexID;
  *
  * <p>{@code idPrefix} orders sibling entities within a type and, per the timeline v2 contract,
  * must be identical across every update of one entity - a differing prefix writes a second row.
- * All assignments therefore go through {@link #idPrefixFor} overloads. Attempts, containers, DAGs
- * and task attempts are ordered newest first; vertices and tasks ascend, the order they are
- * rendered in.
+ * All assignments are therefore centralised in the entity factory methods below. Attempts,
+ * containers, DAGs and task attempts are ordered newest first; vertices and tasks ascend, the
+ * order they are rendered in.
  */
 @Private
 public class HistoryEventTimelineV2Conversion {

@@ -186,7 +186,7 @@ public class TestATSV2HistoryLoggingService {
     }
 
     assertEquals(2, service.eventQueue.size());
-    assertEquals(8, service.droppedEventCount);
+    assertEquals(8, service.droppedEventCount.get());
 
     service.close();
   }

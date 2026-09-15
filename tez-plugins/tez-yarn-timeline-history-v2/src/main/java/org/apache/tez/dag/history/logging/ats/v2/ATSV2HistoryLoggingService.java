@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.api.records.timelineservice.TimelineEntity;
@@ -71,7 +72,7 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
   boolean historyLoggingEnabled = true;
 
   @VisibleForTesting
-  volatile long droppedEventCount = 0;
+  final AtomicLong droppedEventCount = new AtomicLong();
 
   private HistoryEventTimelineV2Conversion conversion;
   private Thread eventHandlingThread;
@@ -197,8 +198,9 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
       // strictly last: a stopped client rejects every further write
       timelineClient.stop();
     }
-    if (droppedEventCount > 0) {
-      LOG.warn("Dropped {} history events because the event queue was full", droppedEventCount);
+    long dropped = droppedEventCount.get();
+    if (dropped > 0) {
+      LOG.warn("Dropped {} history events because the event queue was full", dropped);
     }
   }
 
@@ -209,20 +211,21 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
     }
     // never block: this runs on the AM's central dispatcher thread
     if (!eventQueue.offer(event)) {
-      if (droppedEventCount++ % 1000 == 0) {
+      long dropped = droppedEventCount.incrementAndGet();
+      if (dropped % 1000 == 1) {
         LOG.warn("Event queue full, dropping history event, eventType={}, droppedEventCount={}",
-            event.getHistoryEvent().getEventType(), droppedEventCount);
+            event.getHistoryEvent().getEventType(), dropped);
       }
     }
   }
 
   private void registerTimelineClient() {
-    Object taskSchedulerManager = appContext.getTaskScheduler();
-    if (!(taskSchedulerManager instanceof TaskSchedulerManager)) {
+    TaskSchedulerManager taskSchedulerManager = appContext.getTaskScheduler();
+    if (taskSchedulerManager == null) {
       LOG.warn("No task scheduler manager available, history will not reach ATSv2");
       return;
     }
-    ((TaskSchedulerManager) taskSchedulerManager).registerTimelineV2Client(timelineClient);
+    taskSchedulerManager.registerTimelineV2Client(timelineClient);
   }
 
   private void drainEventQueue() {
