@@ -21,7 +21,7 @@
   <parent>
     <groupId>org.apache.tez</groupId>
     <artifactId>tez</artifactId>
-    <version>0.10.5.1-4.3.0-2</version>
+    <version>0.10.5.2-4.4.0-0</version>
   </parent>
   <artifactId>tez-dist</artifactId>
 
