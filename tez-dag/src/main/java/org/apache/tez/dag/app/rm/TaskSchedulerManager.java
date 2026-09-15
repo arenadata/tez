@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Objects;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -57,8 +58,10 @@ import org.apache.hadoop.yarn.api.records.FinalApplicationStatus;
 import org.apache.hadoop.yarn.api.records.NodeReport;
 import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.Resource;
+import org.apache.hadoop.yarn.client.api.TimelineV2Client;
 import org.apache.hadoop.yarn.event.Event;
 import org.apache.hadoop.yarn.event.EventHandler;
+import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.tez.common.ReflectionUtils;
 import org.apache.tez.dag.api.TezConfiguration;
 import org.apache.tez.dag.api.TezException;
@@ -141,6 +144,13 @@ public class TaskSchedulerManager extends AbstractService implements
                               = new LinkedBlockingQueue<AMSchedulerEvent>();
 
   private final String yarnSchedulerClassName;
+
+  // Rendezvous between a history logging service writing to ATSv2 and the YARN task scheduler,
+  // which owns the AMRMClient the collector address arrives through. Either side may come first:
+  // the schedulers do not exist until serviceStart, and the logging service starts concurrently.
+  private final AtomicReference<TimelineV2Client> pendingTimelineV2Client = new AtomicReference<>();
+  @VisibleForTesting
+  volatile boolean schedulersStarted = false;
 
   // Not tracking container / task to schedulerId. Instead relying on everything flowing through
   // the system and being propagated back via events.
@@ -676,6 +686,9 @@ public class TaskSchedulerManager extends AbstractService implements
         taskSchedulers[i].setShouldUnregister();
       }
     }
+    // volatile write, publishes taskSchedulers[] to a concurrent registerTimelineV2Client caller
+    schedulersStarted = true;
+    propagateTimelineV2Client();
 
     this.eventHandlingThread = new Thread("TaskSchedulerEventHandlerThread") {
       @Override
@@ -1103,5 +1116,53 @@ public class TaskSchedulerManager extends AbstractService implements
   @VisibleForTesting
   public TaskScheduler getTaskScheduler(int taskSchedulerIndex) {
     return taskSchedulers[taskSchedulerIndex].getTaskScheduler();
+  }
+
+  /**
+   * Hands a timeline v2 client to the YARN task scheduler, which owns the AMRMClient the
+   * collector address is delivered through. Safe to call before the schedulers exist: the client
+   * is held and passed on once they start. Never throws; a failure only disables ATSv2 logging.
+   *
+   * <p>Deliberately not synchronized. {@link #serviceStart()} holds this monitor while registering
+   * with the RM, which can block for minutes when the RM is unreachable.
+   *
+   * @param timelineClient the client to register
+   */
+  public void registerTimelineV2Client(TimelineV2Client timelineClient) {
+    pendingTimelineV2Client.set(timelineClient);
+    if (schedulersStarted) {
+      propagateTimelineV2Client();
+    }
+  }
+
+  private void propagateTimelineV2Client() {
+    TimelineV2Client timelineClient = pendingTimelineV2Client.get();
+    if (timelineClient == null) {
+      return;
+    }
+    if (taskSchedulerDescriptors == null) {
+      LOG.warn("Not registering the timeline v2 client: no task scheduler descriptors");
+      return;
+    }
+    for (int i = 0; i < taskSchedulerDescriptors.length; i++) {
+      if (!taskSchedulerDescriptors[i].getEntityName()
+          .equals(TezConstants.getTezYarnServicePluginName())) {
+        continue;
+      }
+      TaskScheduler scheduler = taskSchedulers[i].getTaskScheduler();
+      if (!(scheduler instanceof TimelineV2ClientRegistrar)) {
+        LOG.warn("Not registering the timeline v2 client: {} does not support it",
+            scheduler.getClass().getName());
+        return;
+      }
+      try {
+        ((TimelineV2ClientRegistrar) scheduler).registerTimelineV2Client(timelineClient);
+        LOG.info("Registered the timeline v2 client with {}", scheduler.getClass().getName());
+      } catch (YarnException | RuntimeException e) {
+        LOG.warn("Could not register the timeline v2 client, history will not reach ATSv2", e);
+      }
+      return;
+    }
+    LOG.warn("Not registering the timeline v2 client: no YARN task scheduler is configured");
   }
 }
