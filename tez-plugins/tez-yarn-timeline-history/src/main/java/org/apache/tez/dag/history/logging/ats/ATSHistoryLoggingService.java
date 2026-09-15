@@ -41,7 +41,6 @@ import org.apache.tez.common.ReflectionUtils;
 import org.apache.tez.common.security.DAGAccessControls;
 import org.apache.tez.common.security.HistoryACLPolicyException;
 import org.apache.tez.common.security.HistoryACLPolicyManager;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.tez.dag.api.DagTypeConverters;
 import org.apache.tez.dag.api.TezConfiguration;
 import org.apache.tez.dag.api.TezConstants;
@@ -104,19 +103,9 @@ public class ATSHistoryLoggingService extends HistoryLoggingService {
       return;
     }
 
-    if (conf.getBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED,
-      YarnConfiguration.DEFAULT_TIMELINE_SERVICE_ENABLED)) {
-      timelineClient = TimelineClient.createTimelineClient();
-      timelineClient.init(conf);
-    } else {
-      this.timelineClient = null;
-      if (conf.get(TezConfiguration.TEZ_HISTORY_LOGGING_SERVICE_CLASS, "")
-        .equals(atsHistoryLoggingServiceClassName)) {
-        LOG.warn(atsHistoryLoggingServiceClassName
-            + " is disabled due to Timeline Service being disabled, "
-            + YarnConfiguration.TIMELINE_SERVICE_ENABLED + " set to false");
-      }
-    }
+    timelineClient = TimelineClientFactory.createTimelineClientIfV1Enabled(conf,
+        atsHistoryLoggingServiceClassName);
+
     maxTimeToWaitOnShutdown = conf.getLong(
         TezConfiguration.YARN_ATS_EVENT_FLUSH_TIMEOUT_MILLIS,
         TezConfiguration.YARN_ATS_EVENT_FLUSH_TIMEOUT_MILLIS_DEFAULT);

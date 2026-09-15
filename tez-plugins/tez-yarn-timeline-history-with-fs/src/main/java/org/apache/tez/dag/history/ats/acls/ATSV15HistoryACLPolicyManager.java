@@ -40,9 +40,9 @@ import org.apache.tez.common.security.ACLType;
 import org.apache.tez.common.security.DAGAccessControls;
 import org.apache.tez.common.security.HistoryACLPolicyManager;
 import org.apache.tez.common.security.HistoryACLPolicyException;
-import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.tez.dag.api.TezConfiguration;
 import org.apache.tez.dag.api.TezUncheckedException;
+import org.apache.tez.dag.history.logging.ats.TimelineClientFactory;
 
 public class ATSV15HistoryACLPolicyManager implements HistoryACLPolicyManager {
 
@@ -63,19 +63,10 @@ public class ATSV15HistoryACLPolicyManager implements HistoryACLPolicyManager {
       this.timelineClient.stop();
       this.timelineClient = null;
     }
-    if (conf.getBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED,
-      YarnConfiguration.DEFAULT_TIMELINE_SERVICE_ENABLED)) {
-      this.timelineClient = TimelineClient.createTimelineClient();
-      this.timelineClient.init(this.conf);
+    this.timelineClient = TimelineClientFactory.createTimelineClientIfV1Enabled(this.conf,
+        atsHistoryLoggingServiceClassName);
+    if (this.timelineClient != null) {
       this.timelineClient.start();
-    } else {
-      this.timelineClient = null;
-      if (conf.get(TezConfiguration.TEZ_HISTORY_LOGGING_SERVICE_CLASS, "")
-         .equals(atsHistoryLoggingServiceClassName)) {
-        LOG.warn(atsHistoryLoggingServiceClassName
-            + " is disabled due to Timeline Service being disabled, "
-            + YarnConfiguration.TIMELINE_SERVICE_ENABLED + " set to false");
-      }
     }
     try {
       this.user = UserGroupInformation.getCurrentUser().getShortUserName();

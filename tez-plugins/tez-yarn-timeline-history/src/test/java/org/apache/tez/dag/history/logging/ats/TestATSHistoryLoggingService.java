@@ -221,6 +221,42 @@ public class TestATSHistoryLoggingService {
   }
 
   @Test(timeout=10000)
+  public void testTimelineServiceV2Disable() throws Exception {
+    ATSHistoryLoggingService service = new ATSHistoryLoggingService();
+    service.setAppContext(appContext);
+    conf.setBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED, true);
+    conf.setFloat(YarnConfiguration.TIMELINE_SERVICE_VERSION, 2.0f);
+    conf.set(TezConfiguration.TEZ_HISTORY_LOGGING_SERVICE_CLASS,
+        ATSHistoryLoggingService.class.getName());
+
+    service.init(conf);
+    service.start();
+
+    Assert.assertNull(service.timelineClient);
+
+    TezDAGID tezDAGID = TezDAGID.getInstance(ApplicationId.newInstance(100l, 1), 1);
+    service.handle(new DAGHistoryEvent(tezDAGID,
+        new DAGStartedEvent(tezDAGID, 1001l, "user1", "dagName1")));
+    Assert.assertTrue(service.eventQueue.isEmpty());
+
+    service.close();
+  }
+
+  @Test(timeout=10000)
+  public void testTimelineServiceV15StaysEnabled() throws Exception {
+    ATSHistoryLoggingService service = new ATSHistoryLoggingService();
+    service.setAppContext(appContext);
+    conf.setBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED, true);
+    conf.setFloat(YarnConfiguration.TIMELINE_SERVICE_VERSION, 1.5f);
+
+    service.init(conf);
+
+    Assert.assertNotNull(service.timelineClient);
+
+    service.close();
+  }
+
+  @Test(timeout=10000)
   public void testNonSessionDomains() throws Exception {
     when(historyACLPolicyManager.setupSessionACLs(any(), any()))
         .thenReturn(
