@@ -18,9 +18,11 @@
 
 package org.apache.tez.dag.history.logging.ats.v2;
 
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -59,8 +61,10 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
 
   private static final Logger LOG = LoggerFactory.getLogger(ATSV2HistoryLoggingService.class);
 
-  private static final String ATS_V2_HISTORY_LOGGING_SERVICE_CLASS_NAME =
-      "org.apache.tez.dag.history.logging.ats.v2.ATSV2HistoryLoggingService";
+  /** Consecutive fully failed batches after which the shutdown flush gives up. */
+  private static final int MAX_CONSECUTIVE_DRAIN_FAILURES = 3;
+  /** Empty batches tolerated during the shutdown flush while the queue is still not empty. */
+  private static final int MAX_EMPTY_DRAIN_BATCHES = 3;
 
   @VisibleForTesting
   LinkedBlockingQueue<DAGHistoryEvent> eventQueue;
@@ -77,8 +81,12 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
   private HistoryEventTimelineV2Conversion conversion;
   private Thread eventHandlingThread;
   private final AtomicBoolean stopped = new AtomicBoolean(false);
+  @VisibleForTesting
+  volatile boolean started = false;
   private final Object lock = new Object();
-  private final HashSet<TezDAGID> skippedDAGs = new HashSet<>();
+  // written from the AM dispatcher thread in handle(), read there too; concurrent because
+  // handleCriticalEvent can deliver events from another thread
+  private final Set<TezDAGID> skippedDAGs = ConcurrentHashMap.newKeySet();
 
   private long maxTimeToWaitOnShutdown;
   private boolean waitForeverOnShutdown = false;
@@ -103,9 +111,7 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
 
     if (!YarnConfiguration.timelineServiceV2Enabled(conf)) {
       historyLoggingEnabled = false;
-      LOG.warn("{} is disabled because it requires Timeline Service v2, but {} is set to {}",
-          ATS_V2_HISTORY_LOGGING_SERVICE_CLASS_NAME, YarnConfiguration.TIMELINE_SERVICE_VERSION,
-          YarnConfiguration.getTimelineServiceVersion(conf));
+      logTimelineV2Unavailable(conf);
       return;
     }
 
@@ -146,9 +152,23 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
         subAppWriteEnabled);
   }
 
+  private void logTimelineV2Unavailable(Configuration conf) {
+    String serviceClassName = ATSV2HistoryLoggingService.class.getName();
+    if (!YarnConfiguration.timelineServiceEnabled(conf)) {
+      LOG.warn("{} is disabled due to Timeline Service being disabled, {} set to false",
+          serviceClassName, YarnConfiguration.TIMELINE_SERVICE_ENABLED);
+      return;
+    }
+    // timelineServiceV2Enabled resolves through yarn.timeline-service.versions when it is set
+    String versions = conf.get(YarnConfiguration.TIMELINE_SERVICE_VERSIONS);
+    LOG.warn("{} is disabled because it requires Timeline Service v2, but the configured version"
+        + " is {}", serviceClassName,
+        versions != null ? versions : YarnConfiguration.getTimelineServiceVersion(conf));
+  }
+
   @Override
   public void serviceStart() {
-    if (!historyLoggingEnabled || timelineClient == null) {
+    if (!historyLoggingEnabled) {
       return;
     }
 
@@ -171,16 +191,13 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
             if (events.isEmpty()) {
               continue;
             }
-            try {
-              handleEvents(events, asyncEnabled);
-            } catch (Exception e) {
-              LOG.warn("Error handling events", e);
-            }
+            handleEvents(events, asyncEnabled);
           }
         }
       }
     }, "HistoryEventHandlingThread");
     eventHandlingThread.start();
+    started = true;
   }
 
   @Override
@@ -191,12 +208,15 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
     if (eventHandlingThread != null) {
       eventHandlingThread.interrupt();
     }
-    if (eventQueue != null) {
+    if (started) {
       drainEventQueue();
-    }
-    if (timelineClient != null) {
       // strictly last: a stopped client rejects every further write
       timelineClient.stop();
+    } else if (eventQueue != null && !eventQueue.isEmpty()) {
+      // the client only owns its dispatcher threads once started; publishing or stopping it
+      // before that dereferences a null executor inside Hadoop
+      LOG.warn("ATSV2Service stopped before it started, dropping {} history events",
+          eventQueue.size());
     }
     long dropped = droppedEventCount.get();
     if (dropped > 0) {
@@ -206,7 +226,13 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
 
   @Override
   public void handle(DAGHistoryEvent event) {
-    if (!historyLoggingEnabled || timelineClient == null) {
+    if (!historyLoggingEnabled || stopped.get()) {
+      return;
+    }
+    // filtered here rather than on the handling thread so that a full queue cannot defeat it: a
+    // dropped DAG_SUBMITTED would otherwise leave the DAG out of skippedDAGs and silently
+    // re-enable logging for a DAG that opted out
+    if (!isValidEvent(event)) {
       return;
     }
     // never block: this runs on the AM's central dispatcher thread
@@ -237,6 +263,8 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
           + " waitForever={}", eventQueue.size(), maxTimeToWaitOnShutdown, waitForeverOnShutdown);
       long endTime = appContext.getClock().getTime() + maxTimeToWaitOnShutdown;
       List<DAGHistoryEvent> events = new LinkedList<>();
+      int consecutiveFailures = 0;
+      int emptyBatches = 0;
       while (waitForeverOnShutdown || endTime >= appContext.getClock().getTime()) {
         try {
           getEventBatch(events);
@@ -245,16 +273,26 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
               eventQueue.size());
         }
         if (events.isEmpty()) {
-          LOG.info("Event queue empty, stopping ATSV2Service");
-          break;
+          if (eventQueue.isEmpty()) {
+            LOG.info("Event queue empty, stopping ATSV2Service");
+            break;
+          }
+          // an interrupted poll returns an empty batch while the backlog is still there; the
+          // exception cleared the interrupt flag, so the next poll can succeed
+          if (++emptyBatches > MAX_EMPTY_DRAIN_BATCHES) {
+            LOG.warn("Could not read the ATSv2 backlog, eventQueueBacklog={}", eventQueue.size());
+            break;
+          }
+          continue;
         }
-        try {
-          // synchronous: the async dispatcher discards whatever it still holds when the client is
-          // stopped, and a dead collector would otherwise stall every batch for the full client
-          // retry window
-          handleEvents(events, false);
-        } catch (Exception e) {
-          LOG.warn("Error handling events while stopping, abandoning the remaining backlog", e);
+        emptyBatches = 0;
+        // synchronous: the async dispatcher discards whatever it still holds when the client is
+        // stopped
+        if (handleEvents(events, false)) {
+          consecutiveFailures = 0;
+        } else if (++consecutiveFailures >= MAX_CONSECUTIVE_DRAIN_FAILURES) {
+          LOG.warn("Abandoning the ATSv2 backlog after {} consecutive failed batches,"
+              + " eventQueueBacklog={}", consecutiveFailures, eventQueue.size());
           break;
         }
       }
@@ -272,9 +310,6 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
       DAGHistoryEvent event = eventQueue.poll(maxPollingTimeMillis, TimeUnit.MILLISECONDS);
       if (event == null) {
         break;
-      }
-      if (!isValidEvent(event)) {
-        continue;
       }
       ++counter;
       events.add(event);
@@ -313,32 +348,84 @@ public class ATSV2HistoryLoggingService extends HistoryLoggingService {
     return dagId == null || !skippedDAGs.contains(dagId);
   }
 
-  private void handleEvents(List<DAGHistoryEvent> events, boolean async) throws Exception {
+  /**
+   * Converts a batch of events and publishes it in at most four calls, so that one HTTP round trip
+   * carries the whole batch rather than one entity.
+   *
+   * @return whether everything in the batch reached the collector
+   */
+  private boolean handleEvents(List<DAGHistoryEvent> events, boolean async) {
+    List<TimelineEntity> asyncEntities = new ArrayList<>();
+    List<TimelineEntity> syncEntities = new ArrayList<>();
+    List<TimelineEntity> asyncSubAppEntities = new ArrayList<>();
+    List<TimelineEntity> syncSubAppEntities = new ArrayList<>();
+    boolean published = true;
+
     for (DAGHistoryEvent event : events) {
       HistoryEventType eventType = event.getHistoryEvent().getEventType();
       // a terminal event is published synchronously so it cannot be lost to the async dispatcher
       boolean publishAsync = async && eventType != HistoryEventType.DAG_FINISHED;
-      for (TimelineEntity entity : conversion.convertToTimelineEntities(event.getHistoryEvent())) {
-        publish(entity, publishAsync);
+      List<TimelineEntity> entities;
+      try {
+        entities = conversion.convertToTimelineEntities(event.getHistoryEvent());
+      } catch (Exception e) {
+        LOG.warn("Could not convert a history event, eventType={}", eventType, e);
+        published = false;
+        continue;
+      }
+      for (TimelineEntity entity : entities) {
+        (publishAsync ? asyncEntities : syncEntities).add(entity);
+        if (isSubAppEntity(entity)) {
+          (publishAsync ? asyncSubAppEntities : syncSubAppEntities).add(entity);
+        }
       }
     }
+
+    published &= publish(asyncEntities, true, false);
+    published &= publish(syncEntities, false, false);
+    // published independently of the entity-table write so that one failure does not drop the DAG
+    // from the cross-application listing as well
+    published &= publish(asyncSubAppEntities, true, true);
+    published &= publish(syncSubAppEntities, false, true);
+    return published;
   }
 
-  private void publish(TimelineEntity entity, boolean async) throws Exception {
-    if (async) {
-      timelineClient.putEntitiesAsync(entity);
-    } else {
-      timelineClient.putEntities(entity);
+  /**
+   * Timeline v2 scopes entity queries by application, so DAG entities are mirrored into the
+   * sub-application table, the only place a cross-application listing of DAGs can come from. The
+   * configuration chunks share the DAG entity's identity but carry no events; that listing does
+   * not need them.
+   */
+  private boolean isSubAppEntity(TimelineEntity entity) {
+    return subAppWriteEnabled
+        && EntityTypes.TEZ_DAG_ID.name().equals(entity.getType())
+        && !entity.getEvents().isEmpty();
+  }
+
+  private boolean publish(List<TimelineEntity> entities, boolean async, boolean subApp) {
+    if (entities.isEmpty()) {
+      return true;
     }
-    if (!subAppWriteEnabled || !EntityTypes.TEZ_DAG_ID.name().equals(entity.getType())) {
-      return;
-    }
-    // timeline v2 scopes entity queries by application; the sub-application table is the only
-    // place a cross-application listing of DAGs can come from
-    if (async) {
-      timelineClient.putSubAppEntitiesAsync(entity);
-    } else {
-      timelineClient.putSubAppEntities(entity);
+    TimelineEntity[] batch = entities.toArray(new TimelineEntity[0]);
+    try {
+      if (subApp) {
+        if (async) {
+          timelineClient.putSubAppEntitiesAsync(batch);
+        } else {
+          timelineClient.putSubAppEntities(batch);
+        }
+      } else {
+        if (async) {
+          timelineClient.putEntitiesAsync(batch);
+        } else {
+          timelineClient.putEntities(batch);
+        }
+      }
+      return true;
+    } catch (Exception e) {
+      LOG.warn("Could not publish {} timeline entities, subApp={}, async={}",
+          batch.length, subApp, async, e);
+      return false;
     }
   }
 }

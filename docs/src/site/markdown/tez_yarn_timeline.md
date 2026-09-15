@@ -1,5 +1,3 @@
-| Timeline with ACLs Support | No | No | Yes |
-| Timeline v2 Support | No | No | Hadoop 3.x only |
 <!--
    Licensed to the Apache Software Foundation (ASF) under one or more
    contributor license agreements.  See the NOTICE file distributed with
@@ -110,6 +108,8 @@ sub-application table, which is what makes a listing of DAGs across applications
 `/ws/v2/timeline/users/{user}/entities/TEZ_DAG_ID`. Set `tez.yarn.ats.v2.subapp.write` to false to
 stop writing them.
 
-**The Tez UI cannot read Timeline v2.** It issues ATSv1 requests, so enabling this service alone
-leaves the UI empty. Keep the ATSv1 or ATSv1.5 service, or the protobuf history logger, if the UI
-is needed.
+**The Tez UI cannot read Timeline v2.** It issues ATSv1 requests, so enabling this service leaves
+the UI empty. `tez.history.logging.service.class` names a single class and only one history
+logging service runs, so the ATSv1 service cannot be kept alongside it: a cluster that needs the
+UI has to stay on ATSv1 or ATSv1.5. History written to Timeline v2 is read through the timeline
+reader's REST API instead.

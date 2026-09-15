@@ -25,6 +25,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -337,6 +338,41 @@ public class TestHistoryEventTimelineV2Conversion {
     }
     assertEquals(entries, merged.size());
     assertEquals(value.toString(), merged.get("key0"));
+  }
+
+  /**
+   * The budget is in bytes, so it has to be measured in UTF-8, not in UTF-16 code units.
+   */
+  @Test(timeout = 5000)
+  public void testConfigChunkingCountsUtf8Bytes() {
+    // 100 characters, 3 UTF-8 bytes each
+    StringBuilder value = new StringBuilder();
+    for (int i = 0; i < 100; i++) {
+      value.append('中');
+    }
+    Configuration conf = new Configuration(false);
+    for (int i = 0; i < 10; i++) {
+      conf.set("key" + i, value.toString());
+    }
+
+    // 10 entries at ~304 bytes each; a UTF-16 count would see ~104 and fit them all in one entity
+    HistoryEventTimelineV2Conversion chunking = new HistoryEventTimelineV2Conversion(1024, true);
+    List<TimelineEntity> entities = chunking.convertToTimelineEntities(
+        new AppLaunchedEvent(applicationId, 1L, 2L, USER, conf, null));
+
+    assertTrue("Expected the byte budget to split the configuration", entities.size() > 2);
+    for (TimelineEntity entity : entities) {
+      long bytes = 0;
+      for (Map.Entry<String, String> entry : entity.getConfigs().entrySet()) {
+        bytes += entry.getKey().getBytes(StandardCharsets.UTF_8).length
+            + entry.getValue().getBytes(StandardCharsets.UTF_8).length;
+      }
+      // a single entry larger than the budget is still emitted whole, so only multi-entry
+      // entities are bounded
+      if (entity.getConfigs().size() > 1) {
+        assertTrue("Chunk of " + bytes + " bytes exceeds the budget", bytes <= 1024);
+      }
+    }
   }
 
   @Test(timeout = 5000)

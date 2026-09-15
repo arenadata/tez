@@ -677,14 +677,13 @@ public class HistoryEventTimelineV2Conversion {
       return entities;
     }
 
+    EntityTypes entityType = EntityTypes.valueOf(entity.getType());
     TimelineEntity current = entity;
-    int currentSize = 0;
+    long currentSize = 0;
     for (Entry<String, String> entry : DAGUtils.convertConfigurationToATSMap(conf).entrySet()) {
-      int entrySize = entry.getKey().length()
-          + (entry.getValue() == null ? 0 : entry.getValue().length());
+      long entrySize = utf8Length(entry.getKey()) + utf8Length(entry.getValue());
       if (currentSize > 0 && currentSize + entrySize > configPublishSizeBytes) {
-        current = newEntity(EntityTypes.valueOf(entity.getType()), entity.getId(),
-            entity.getIdPrefix());
+        current = newEntity(entityType, entity.getId(), entity.getIdPrefix());
         entities.add(current);
         currentSize = 0;
       }
@@ -692,5 +691,28 @@ public class HistoryEventTimelineV2Conversion {
       currentSize += entrySize;
     }
     return entities;
+  }
+
+  /** Length of the UTF-8 encoding of a string, without encoding it. */
+  private static long utf8Length(String value) {
+    if (value == null) {
+      return 0;
+    }
+    long length = 0;
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      if (c < 0x80) {
+        length += 1;
+      } else if (c < 0x800) {
+        length += 2;
+      } else if (Character.isHighSurrogate(c) && i + 1 < value.length()
+          && Character.isLowSurrogate(value.charAt(i + 1))) {
+        length += 4;
+        i++;
+      } else {
+        length += 3;
+      }
+    }
+    return length;
   }
 }

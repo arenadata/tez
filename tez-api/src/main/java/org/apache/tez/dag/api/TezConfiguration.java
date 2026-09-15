@@ -1850,7 +1850,7 @@ public class TezConfiguration extends Configuration {
    * metrics, which makes them queryable and aggregatable. Disable it for very large DAGs, where
    * the number of metric columns becomes a storage concern.
    */
-  @ConfigurationScope(Scope.DAG)
+  @ConfigurationScope(Scope.AM)
   @ConfigurationProperty(type="boolean")
   public static final String YARN_ATS_V2_COUNTERS_AS_METRICS = TEZ_PREFIX
       + "yarn.ats.v2.counters.as.metrics";
