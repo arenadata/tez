@@ -151,8 +151,8 @@ public final class TokenCache {
     // RM skips renewing token with empty renewer
     int obtained = addCredentialProviderTokens(credentials, conf, excluded, "");
     if (!renewable.isEmpty()) {
-      String delegTokenRenewer = Master.getMasterPrincipal(conf);
-      if (delegTokenRenewer == null || delegTokenRenewer.length() == 0) {
+      String delegTokenRenewer = getDelegationTokenRenewer(conf);
+      if (delegTokenRenewer == null) {
         LOG.warn("Not obtaining delegation tokens from credential providers {}: {} is not set,"
             + " so there is no principal to use as renewer", renewable,
             YarnConfiguration.RM_PRINCIPAL);
@@ -230,8 +230,8 @@ public final class TokenCache {
     // RM skips renewing token with empty renewer
     String delegTokenRenewer = "";
     if (!isTokenRenewalExcluded(fs, conf)) {
-      delegTokenRenewer = Master.getMasterPrincipal(conf);
-      if (delegTokenRenewer == null || delegTokenRenewer.length() == 0) {
+      delegTokenRenewer = getDelegationTokenRenewer(conf);
+      if (delegTokenRenewer == null) {
         throw new IOException(
                 "Can't get Master Kerberos principal for use as renewer");
       }
@@ -244,6 +244,15 @@ public final class TokenCache {
         LOG.info("Got dt for " + fs.getUri() + "; "+token);
       }
     }
+  }
+
+  /**
+   * @return the principal to record as delegation token renewer, or null if the master
+   *     principal is not configured
+   */
+  private static String getDelegationTokenRenewer(Configuration conf) throws IOException {
+    String delegTokenRenewer = Master.getMasterPrincipal(conf);
+    return delegTokenRenewer == null || delegTokenRenewer.isEmpty() ? null : delegTokenRenewer;
   }
 
   private static final Text SESSION_TOKEN = new Text("SessionToken");
