@@ -37,6 +37,9 @@ public class ATSConstants {
   public static final String PRIMARY_FILTERS = "primaryfilters";
   public static final String OTHER_INFO = "otherinfo";
 
+  /** Prefix for entity ids derived from a YARN id rather than a Tez one. */
+  public static final String TEZ_ENTITY_ID_PREFIX = "tez_";
+
   /* Section for related entities */
   public static final String APPLICATION_ID = "applicationId";
   public static final String APPLICATION_ATTEMPT_ID = "applicationAttemptId";

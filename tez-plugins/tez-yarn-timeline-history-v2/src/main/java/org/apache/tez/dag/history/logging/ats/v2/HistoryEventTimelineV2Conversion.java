@@ -173,7 +173,7 @@ public class HistoryEventTimelineV2Conversion {
   }
 
   private List<TimelineEntity> convertAppLaunchedEvent(AppLaunchedEvent event) {
-    String entityId = ATSV2Constants.TEZ_ENTITY_ID_PREFIX + event.getApplicationId();
+    String entityId = ATSConstants.TEZ_ENTITY_ID_PREFIX + event.getApplicationId();
     TimelineEntity entity = newEntity(EntityTypes.TEZ_APPLICATION, entityId,
         TimelineEntity.DEFAULT_ENTITY_PREFIX);
     entity.setCreatedTime(event.getLaunchTime());
@@ -268,7 +268,7 @@ public class HistoryEventTimelineV2Conversion {
   private List<TimelineEntity> convertDAGSubmittedEvent(DAGSubmittedEvent event) {
     TimelineEntity entity = newDagEntity(event.getDAGID(), event.getApplicationId().toString());
     entity.addIsRelatedToEntity(EntityTypes.TEZ_APPLICATION_ATTEMPT.name(),
-        ATSV2Constants.TEZ_ENTITY_ID_PREFIX + event.getApplicationAttemptId());
+        ATSConstants.TEZ_ENTITY_ID_PREFIX + event.getApplicationAttemptId());
     entity.setCreatedTime(event.getSubmitTime());
     entity.addEvent(newEvent(HistoryEventType.DAG_SUBMITTED, event.getSubmitTime()));
 
@@ -569,10 +569,10 @@ public class HistoryEventTimelineV2Conversion {
   private static TimelineEntity newApplicationAttemptEntity(
       ApplicationAttemptId appAttemptId) {
     TimelineEntity entity = newEntity(EntityTypes.TEZ_APPLICATION_ATTEMPT,
-        ATSV2Constants.TEZ_ENTITY_ID_PREFIX + appAttemptId,
+        ATSConstants.TEZ_ENTITY_ID_PREFIX + appAttemptId,
         TimelineServiceHelper.invertLong(appAttemptId.getAttemptId()));
     entity.addIsRelatedToEntity(EntityTypes.TEZ_APPLICATION.name(),
-        ATSV2Constants.TEZ_ENTITY_ID_PREFIX + appAttemptId.getApplicationId());
+        ATSConstants.TEZ_ENTITY_ID_PREFIX + appAttemptId.getApplicationId());
     return entity;
   }
 
@@ -580,17 +580,17 @@ public class HistoryEventTimelineV2Conversion {
       ContainerId containerId,
       ApplicationAttemptId appAttemptId) {
     TimelineEntity entity = newEntity(EntityTypes.TEZ_CONTAINER_ID,
-        ATSV2Constants.TEZ_ENTITY_ID_PREFIX + containerId,
+        ATSConstants.TEZ_ENTITY_ID_PREFIX + containerId,
         TimelineServiceHelper.invertLong(containerId.getContainerId()));
     entity.addIsRelatedToEntity(EntityTypes.TEZ_APPLICATION_ATTEMPT.name(),
-        ATSV2Constants.TEZ_ENTITY_ID_PREFIX + appAttemptId);
+        ATSConstants.TEZ_ENTITY_ID_PREFIX + appAttemptId);
     return entity;
   }
 
   private static TimelineEntity newDagEntity(TezDAGID dagId, String applicationId) {
     TimelineEntity entity = newEntity(EntityTypes.TEZ_DAG_ID, dagId.toString(), idPrefixFor(dagId));
     entity.addIsRelatedToEntity(EntityTypes.TEZ_APPLICATION.name(),
-        ATSV2Constants.TEZ_ENTITY_ID_PREFIX + applicationId);
+        ATSConstants.TEZ_ENTITY_ID_PREFIX + applicationId);
     entity.addInfo(ATSConstants.APPLICATION_ID, applicationId);
     return entity;
   }

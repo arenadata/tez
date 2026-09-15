@@ -34,9 +34,6 @@ public final class ATSV2Constants {
    */
   public static final String COUNTER_METRIC_SEPARATOR = ":";
 
-  /** Prefix for entity ids derived from a YARN id rather than a Tez id. */
-  public static final String TEZ_ENTITY_ID_PREFIX = "tez_";
-
   private ATSV2Constants() {
   }
 }
