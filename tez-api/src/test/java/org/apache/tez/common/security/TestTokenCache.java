@@ -173,6 +173,38 @@ public class TestTokenCache {
   }
 
   @Test(timeout=5000)
+  public void testObtainTokensForCredentialProvidersWhenProviderIsUnavailable() throws Exception {
+    TokenIssuingCredentialProvider.ISSUED.set(0);
+    UnavailableCredentialProvider.ATTEMPTS.set(0);
+    Configuration conf = new Configuration(TestTokenCache.conf);
+    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH,
+        "dtdown://vault-down/,dtissuer://vault-a/");
+    Credentials creds = new Credentials();
+
+    // a provider that cannot be reached must not fail the submission
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+
+    Assert.assertEquals(1, UnavailableCredentialProvider.ATTEMPTS.get());
+    Assert.assertNull(creds.getToken(new Text("dtdown://vault-down/")));
+    Assert.assertEquals(renewer, identifierOf(creds, "dtissuer://vault-a/"));
+    Assert.assertEquals(1, creds.numberOfTokens());
+  }
+
+  @Test(timeout=5000)
+  public void testObtainTokensForCredentialProvidersWhenAllProvidersAreUnavailable()
+      throws Exception {
+    Configuration conf = new Configuration(TestTokenCache.conf);
+    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH, "dtdown://vault-down/");
+    UnavailableCredentialProvider.ATTEMPTS.set(0);
+    Credentials creds = new Credentials();
+
+    TokenCache.obtainTokensForCredentialProvidersInternal(creds, conf);
+
+    Assert.assertEquals(1, UnavailableCredentialProvider.ATTEMPTS.get());
+    Assert.assertEquals(0, creds.numberOfTokens());
+  }
+
+  @Test(timeout=5000)
   public void testObtainTokensForCredentialProvidersWithoutProviders() throws Exception {
     Credentials creds = new Credentials();
 
