@@ -2300,6 +2300,14 @@ public class TezConfiguration extends Configuration {
   public static final String TEZ_JOB_FS_SERVERS_TOKEN_RENEWAL_EXCLUDE = "tez.job.fs-servers.token-renewal.exclude";
 
   /**
+   *  Skip delegation token renewal for credential providers on the specified hosts.
+   */
+  @ConfigurationScope(Scope.AM)
+  @ConfigurationProperty
+  public static final String TEZ_JOB_CREDENTIAL_PROVIDERS_TOKEN_RENEWAL_EXCLUDE =
+      "tez.job.credential-providers.token-renewal.exclude";
+
+  /**
    *  Comma-separated list of properties that MRReaderMapred should return (if present) when calling for config updates.
    */
   @ConfigurationScope(Scope.VERTEX)
