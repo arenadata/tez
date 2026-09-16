@@ -32,6 +32,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,6 +50,7 @@ import org.apache.hadoop.yarn.api.records.timeline.TimelineEntity;
 import org.apache.hadoop.yarn.api.records.timeline.TimelineEntityGroupId;
 import org.apache.hadoop.yarn.api.records.timeline.TimelinePutResponse;
 import org.apache.hadoop.yarn.client.api.TimelineClient;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.tez.common.security.DAGAccessControls;
 import org.apache.tez.common.security.HistoryACLPolicyManager;
@@ -66,7 +68,9 @@ import org.apache.tez.dag.records.TezTaskAttemptID;
 import org.apache.tez.dag.records.TezTaskID;
 import org.apache.tez.dag.records.TezVertexID;
 import org.apache.tez.hadoop.shim.HadoopShim;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -81,6 +85,9 @@ public class TestATSV15HistoryLoggingService {
     TimelineEntityGroupId.newInstance(ApplicationId.newInstance(0, -1), "");
 
   private AppContext appContext;
+
+  @Rule
+  public TemporaryFolder tempFolder = new TemporaryFolder();
 
   @Test(timeout=2000)
   public void testDAGGroupingDefault() throws Exception {
@@ -422,6 +429,53 @@ public class TestATSV15HistoryLoggingService {
     assertEquals(1, entityLog.size());
 
     service.stop();
+  }
+
+  @Test(timeout = 5000)
+  public void testTimelineServiceV2Disable() throws Exception {
+    ATSV15HistoryLoggingService service = new ATSV15HistoryLoggingService();
+    appContext = mock(AppContext.class);
+    when(appContext.getApplicationID()).thenReturn(appId);
+    when(appContext.getHadoopShim()).thenReturn(new HadoopShim() {});
+    service.setAppContext(appContext);
+
+    Configuration conf = new Configuration(false);
+    conf.setBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED, true);
+    conf.setFloat(YarnConfiguration.TIMELINE_SERVICE_VERSION, 2.0f);
+    conf.set(TezConfiguration.TEZ_HISTORY_LOGGING_SERVICE_CLASS,
+        ATSV15HistoryLoggingService.class.getName());
+
+    service.init(conf);
+    service.start();
+
+    assertNull(service.timelineClient);
+
+    service.close();
+  }
+
+  @Test(timeout = 5000)
+  public void testTimelineServiceV15StaysEnabled() throws Exception {
+    ATSV15HistoryLoggingService service = new ATSV15HistoryLoggingService();
+    appContext = mock(AppContext.class);
+    when(appContext.getApplicationID()).thenReturn(appId);
+    when(appContext.getHadoopShim()).thenReturn(new HadoopShim() {});
+    service.setAppContext(appContext);
+
+    Configuration conf = new Configuration(false);
+    conf.setBoolean(YarnConfiguration.TIMELINE_SERVICE_ENABLED, true);
+    conf.setFloat(YarnConfiguration.TIMELINE_SERVICE_VERSION, 1.5f);
+    // the v1.5 client writes summaries through the entity-group FS store, which must exist
+    File activeDir = tempFolder.newFolder("active");
+    conf.set(YarnConfiguration.TIMELINE_SERVICE_ENTITYGROUP_FS_STORE_ACTIVE_DIR,
+        activeDir.getAbsolutePath());
+    conf.set(YarnConfiguration.TIMELINE_SERVICE_ENTITYGROUP_FS_STORE_DONE_DIR,
+        tempFolder.newFolder("done").getAbsolutePath());
+
+    service.init(conf);
+
+    assertNotNull(service.timelineClient);
+
+    service.close();
   }
 
   private ATSV15HistoryLoggingService createService(int numDagsPerGroup) throws IOException, YarnException {

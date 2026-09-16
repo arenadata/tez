@@ -28,11 +28,13 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -66,6 +68,7 @@ import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.client.api.AMRMClient;
+import org.apache.hadoop.yarn.client.api.TimelineV2Client;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.event.Event;
 import org.apache.hadoop.yarn.event.EventHandler;
@@ -624,6 +627,60 @@ public class TestTaskSchedulerManager {
   }
 
   @Test(timeout = 5000)
+  public void testRegisterTimelineV2ClientBeforeSchedulersStart() throws Exception {
+    TSEHForMultipleSchedulersTest tseh = createTsehWithYarnScheduler();
+    TimelineV2Client timelineClient = mock(TimelineV2Client.class);
+
+    tseh.registerTimelineV2Client(timelineClient);
+    tseh.init(new Configuration(false));
+    tseh.start();
+
+    verify((TimelineV2ClientRegistrar) tseh.getTestTaskScheduler(0))
+        .registerTimelineV2Client(timelineClient);
+  }
+
+  @Test(timeout = 5000)
+  public void testRegisterTimelineV2ClientAfterSchedulersStart() throws Exception {
+    TSEHForMultipleSchedulersTest tseh = createTsehWithYarnScheduler();
+    TimelineV2Client timelineClient = mock(TimelineV2Client.class);
+
+    tseh.init(new Configuration(false));
+    tseh.start();
+    verify((TimelineV2ClientRegistrar) tseh.getTestTaskScheduler(0), never())
+        .registerTimelineV2Client(any(TimelineV2Client.class));
+
+    tseh.registerTimelineV2Client(timelineClient);
+
+    verify((TimelineV2ClientRegistrar) tseh.getTestTaskScheduler(0))
+        .registerTimelineV2Client(timelineClient);
+  }
+
+  @Test(timeout = 5000)
+  public void testRegisterTimelineV2ClientWithoutYarnScheduler() throws Exception {
+    List<NamedEntityDescriptor> taskSchedulers = new LinkedList<>();
+    taskSchedulers.add(new NamedEntityDescriptor(TezConstants.getTezUberServicePluginName(), null)
+        .setUserPayload(TezUtils.createUserPayloadFromConf(new Configuration(false))));
+    TSEHForMultipleSchedulersTest tseh =
+        new TSEHForMultipleSchedulersTest(mockAppContext, mockClientService, mockEventHandler,
+            mockSigMatcher, mockWebUIService, taskSchedulers, false);
+
+    tseh.init(new Configuration(false));
+    tseh.start();
+    // must degrade to a warning rather than failing the AM
+    tseh.registerTimelineV2Client(mock(TimelineV2Client.class));
+
+    assertTrue(tseh.getUberSchedulerCreated());
+  }
+
+  private TSEHForMultipleSchedulersTest createTsehWithYarnScheduler() throws Exception {
+    List<NamedEntityDescriptor> taskSchedulers = new LinkedList<>();
+    taskSchedulers.add(new NamedEntityDescriptor(TezConstants.getTezYarnServicePluginName(), null)
+        .setUserPayload(TezUtils.createUserPayloadFromConf(new Configuration(false))));
+    return new TSEHForMultipleSchedulersTest(mockAppContext, mockClientService, mockEventHandler,
+        mockSigMatcher, mockWebUIService, taskSchedulers, false);
+  }
+
+  @Test(timeout = 5000)
   public void testTaskSchedulerRouting() throws Exception {
     Configuration conf = new Configuration(false);
     UserPayload defaultPayload = TezUtils.createUserPayloadFromConf(conf);
@@ -973,7 +1030,8 @@ public class TestTaskSchedulerManager {
       super(appContext, clientService, eventHandler, containerSignatureMatcher, webUI,
           schedulerDescriptors, isPureLocalMode,
           new HadoopShimsLoader(appContext.getAMConf()).getHadoopShim());
-      yarnTaskScheduler = mock(TaskScheduler.class);
+      yarnTaskScheduler = mock(TaskScheduler.class,
+          withSettings().extraInterfaces(TimelineV2ClientRegistrar.class));
       uberTaskScheduler = mock(TaskScheduler.class);
     }
 

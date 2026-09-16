@@ -35,9 +35,11 @@ import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.api.records.ResourceRequest;
 import org.apache.hadoop.yarn.client.api.AMRMClient;
+import org.apache.hadoop.yarn.client.api.TimelineV2Client;
 import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
 import org.apache.hadoop.yarn.client.api.async.impl.AMRMClientAsyncImpl;
 import org.apache.hadoop.yarn.client.api.impl.AMRMClientImpl;
+import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.proto.YarnServiceProtos.SchedulerResourceTypes;
 import org.apache.hadoop.yarn.util.RackResolver;
 import org.apache.hadoop.yarn.util.resource.Resources;
@@ -91,7 +93,7 @@ import java.util.concurrent.TimeUnit;
  * densely allocated (i.e.: there are no "gaps" in the vertex ID space).
   */
 public class DagAwareYarnTaskScheduler extends TaskScheduler
-    implements AMRMClientAsync.CallbackHandler {
+    implements AMRMClientAsync.CallbackHandler, TimelineV2ClientRegistrar {
   private static final Logger LOG = LoggerFactory.getLogger(DagAwareYarnTaskScheduler.class);
   private static final Comparator<HeldContainer> PREEMPT_ORDER_COMPARATOR = new PreemptOrderComparator();
 
@@ -794,6 +796,16 @@ public class DagAwareYarnTaskScheduler extends TaskScheduler
   @Override
   public int getClusterNodeCount() {
     return client.getClusterNodeCount();
+  }
+
+  @Override
+  public void registerTimelineV2Client(TimelineV2Client timelineClient) throws YarnException {
+    AMRMClientAsyncWrapper amRmClient = client;
+    if (amRmClient == null) {
+      throw new YarnException("Cannot register a timeline v2 client before the scheduler"
+          + " is initialized");
+    }
+    amRmClient.registerTimelineV2Client(timelineClient);
   }
 
   @Override

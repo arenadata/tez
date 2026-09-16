@@ -1824,6 +1824,48 @@ public class TezConfiguration extends Configuration {
       + "yarn.ats.max.polling.time.per.event.millis";
   public static final int YARN_ATS_MAX_POLLING_TIME_PER_EVENT_DEFAULT = 10;
 
+  /**
+   * Boolean value. Whether the ATSv2 history logging service publishes entities asynchronously.
+   * Terminal events and the flush on AM shutdown are always published synchronously. Setting this
+   * to false makes every publish synchronous, which is useful when debugging.
+   */
+  @ConfigurationScope(Scope.AM)
+  @ConfigurationProperty(type="boolean")
+  public static final String YARN_ATS_V2_ASYNC_ENABLED = TEZ_PREFIX + "yarn.ats.v2.async";
+  public static final boolean YARN_ATS_V2_ASYNC_ENABLED_DEFAULT = true;
+
+  /**
+   * Int value. Maximum bytes of configuration carried by a single ATSv2 entity. A larger
+   * configuration is split across several entities. Timeline v2 enforces no entity size limit of
+   * its own, so this is the only bound on the size of a configuration write.
+   */
+  @ConfigurationScope(Scope.AM)
+  @ConfigurationProperty(type="integer")
+  public static final String YARN_ATS_V2_CONFIG_PUBLISH_SIZE_BYTES = TEZ_PREFIX
+      + "yarn.ats.v2.config.publish.size.bytes";
+  public static final int YARN_ATS_V2_CONFIG_PUBLISH_SIZE_BYTES_DEFAULT = 10 * 1024;
+
+  /**
+   * Boolean value. Whether the ATSv2 history logging service publishes counters as timeline
+   * metrics, which makes them queryable and aggregatable. Disable it for very large DAGs, where
+   * the number of metric columns becomes a storage concern.
+   */
+  @ConfigurationScope(Scope.AM)
+  @ConfigurationProperty(type="boolean")
+  public static final String YARN_ATS_V2_COUNTERS_AS_METRICS = TEZ_PREFIX
+      + "yarn.ats.v2.counters.as.metrics";
+  public static final boolean YARN_ATS_V2_COUNTERS_AS_METRICS_DEFAULT = true;
+
+  /**
+   * Boolean value. Whether the ATSv2 history logging service also writes DAG entities to the
+   * sub-application table. Timeline v2 scopes entity queries by application, so this is what makes
+   * a cross-application listing of DAGs possible.
+   */
+  @ConfigurationScope(Scope.AM)
+  @ConfigurationProperty(type="boolean")
+  public static final String YARN_ATS_V2_SUBAPP_WRITE = TEZ_PREFIX + "yarn.ats.v2.subapp.write";
+  public static final boolean YARN_ATS_V2_SUBAPP_WRITE_DEFAULT = true;
+
   @ConfigurationScope(Scope.AM)
   @ConfigurationProperty(type="boolean")
   public static final String YARN_ATS_ACL_DOMAINS_AUTO_CREATE = TEZ_PREFIX

@@ -58,6 +58,7 @@ import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.api.records.ResourceRequest;
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest;
+import org.apache.hadoop.yarn.client.api.TimelineV2Client;
 import org.apache.hadoop.yarn.client.api.async.AMRMClientAsync;
 import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.apache.hadoop.yarn.util.RackResolver;
@@ -84,7 +85,7 @@ import com.google.common.collect.Sets;
     }
  */
 public class YarnTaskSchedulerService extends TaskScheduler
-                             implements AMRMClientAsync.CallbackHandler {
+                             implements AMRMClientAsync.CallbackHandler, TimelineV2ClientRegistrar {
   private static final Logger LOG = LoggerFactory.getLogger(YarnTaskSchedulerService.class);
 
 
@@ -262,6 +263,11 @@ public class YarnTaskSchedulerService extends TaskScheduler
   public int getClusterNodeCount() {
     // this can potentially be cheaper after YARN-1722
     return amRmClient.getClusterNodeCount();
+  }
+
+  @Override
+  public void registerTimelineV2Client(TimelineV2Client timelineClient) throws YarnException {
+    amRmClient.registerTimelineV2Client(timelineClient);
   }
 
   @Override

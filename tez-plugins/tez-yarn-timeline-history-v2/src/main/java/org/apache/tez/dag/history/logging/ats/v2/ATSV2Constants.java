@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,27 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.tez.dag.history.ats.acls;
+package org.apache.tez.dag.history.logging.ats.v2;
 
-import java.io.IOException;
+import org.apache.hadoop.classification.InterfaceAudience.Private;
 
-import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.apache.hadoop.yarn.api.records.timeline.TimelineDomain;
-import org.apache.hadoop.yarn.exceptions.YarnException;
+/**
+ * Constants specific to the timeline v2 entity model. Field names shared with ATSv1 stay in
+ * {@link org.apache.tez.common.ATSConstants}.
+ */
+@Private
+public final class ATSV2Constants {
 
-public class ATSHistoryACLPolicyManager extends ATSHistoryACLPolicyManagerBase {
+  /**
+   * Separates the counter group from the counter name in a metric id. Matches what MapReduce
+   * publishes. Counter group names are class names and never contain a colon; counter names are
+   * not escaped.
+   */
+  public static final String COUNTER_METRIC_SEPARATOR = ":";
 
-  private static final String ATS_HISTORY_LOGGING_SERVICE_CLASS_NAME =
-      "org.apache.tez.dag.history.logging.ats.ATSHistoryLoggingService";
-
-  @Override
-  protected String getHistoryLoggingServiceClassName() {
-    return ATS_HISTORY_LOGGING_SERVICE_CLASS_NAME;
-  }
-
-  @Override
-  protected void putDomain(ApplicationId applicationId, TimelineDomain timelineDomain)
-      throws IOException, YarnException {
-    timelineClient.putDomain(timelineDomain);
+  private ATSV2Constants() {
   }
 }

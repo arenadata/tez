@@ -67,7 +67,7 @@ jobs:
       matrix:
         include:
           - name: Unit & Module Tests
-            modules: hadoop-shim,tez-api,tez-common,tez-runtime-internals,tez-runtime-library,tez-mapreduce,tez-dag,tez-plugins/tez-protobuf-history-plugin,tez-plugins/tez-yarn-timeline-history,tez-plugins/tez-yarn-timeline-history-with-acls,tez-plugins/tez-yarn-timeline-history-with-fs,tez-plugins/tez-yarn-timeline-cache-plugin,tez-plugins/tez-history-parser,tez-tools/analyzers/job-analyzer
+            modules: hadoop-shim,tez-api,tez-common,tez-runtime-internals,tez-runtime-library,tez-mapreduce,tez-dag,tez-plugins/tez-protobuf-history-plugin,tez-plugins/tez-yarn-timeline-history,tez-plugins/tez-yarn-timeline-history-with-acls,tez-plugins/tez-yarn-timeline-history-with-fs,tez-plugins/tez-yarn-timeline-history-v2,tez-plugins/tez-yarn-timeline-cache-plugin,tez-plugins/tez-history-parser,tez-tools/analyzers/job-analyzer
             timeout: 60
 
           - name: Integration - Jobs

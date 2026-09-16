@@ -67,6 +67,10 @@ and does not require any complex server-side hosting logic.
 ### Configuring the Timeline Server URL and Resource Manager UI URL.
 By default, the Tez UI attempts to connect to Timeline Server using the same host as the Tez UI.  For example, if the UI is hosted on localhost, the Timeline Server URL is assumed to be http(s)://localhost:8188 and the Resource manager web url is assumed to be http(s)://localhost:8088.
 
+The Tez UI reads history data through the Timeline Server v1 REST API. It cannot read YARN Timeline
+Service v2, so a cluster whose only history logger is `ATSV2HistoryLoggingService` leaves the UI
+empty.
+
 If the Timeline Server and/or Resource manager is hosted on a different host, the Tez UI needs corresponding changes to be configured in scripts/configs.js ( within the extracted tez-ui.war). Uncomment the following lines and set the hostname and port appropriately. "timelineBaseUrl" maps to YARN Timeline Server and "RMWebUrl" maps to YARN ResourceManager.
 
 ```

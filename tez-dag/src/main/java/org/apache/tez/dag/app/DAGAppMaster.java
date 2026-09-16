@@ -603,6 +603,9 @@ public class DAGAppMaster extends AbstractService {
     dispatcher.register(ContainerLauncherEventType.class, containerLauncherManager);
 
     historyEventHandler = createHistoryEventHandler(context);
+    // added last so that stopServices, which stops in reverse order, flushes history while the
+    // task scheduler is still running: the ATSv2 logger needs the AM registered with the RM for
+    // the timeline collector to stay reachable
     addIfService(historyEventHandler, true);
 
     this.sessionTimeoutInterval = TezCommonUtils.getDAGSessionTimeout(amConf);
