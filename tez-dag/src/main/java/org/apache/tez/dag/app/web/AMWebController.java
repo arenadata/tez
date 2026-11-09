@@ -42,10 +42,13 @@ import com.google.inject.Inject;
 import com.google.inject.name.Named;
 
 import org.apache.commons.lang3.StringEscapeUtils;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.tez.common.counters.CounterGroup;
 import org.apache.tez.common.counters.LimitExceededException;
 import org.apache.tez.common.counters.TezCounter;
 import org.apache.tez.common.counters.TezCounters;
+import org.apache.tez.common.security.ACLManager;
 import org.apache.tez.dag.api.client.ProgressBuilder;
 import org.apache.tez.dag.app.dag.Task;
 import org.apache.tez.dag.app.dag.TaskAttempt;
@@ -170,11 +173,34 @@ public class AMWebController extends Controller {
 
   @VisibleForTesting
   static boolean _hasAccess(UserGroupInformation callerUGI, AppContext appContext) {
+    return _hasAccess(callerUGI, appContext, UserGroupInformation.isSecurityEnabled());
+  }
+
+  @VisibleForTesting
+  static boolean _hasAccess(UserGroupInformation callerUGI, AppContext appContext,
+      boolean securityEnabled) {
+    ACLManager aclManager = appContext.getAMACLManager();
     if (callerUGI == null) {
-      // Allow anonymous access iff acls disabled
-      return !appContext.getAMACLManager().isAclsEnabled();
+      if (!aclManager.isAclsEnabled()) {
+        return true;
+      }
+      if (securityEnabled) {
+        return false;
+      }
+      // In simple mode an anonymous request gets the rights of the HTTP static user, the same
+      // identity StaticUserWebFilter would have assigned to it.
+      Configuration conf = appContext.getAMConf();
+      String staticUser = conf == null
+          ? CommonConfigurationKeys.DEFAULT_HADOOP_HTTP_STATIC_USER
+          : conf.get(CommonConfigurationKeys.HADOOP_HTTP_STATIC_USER,
+              CommonConfigurationKeys.DEFAULT_HADOOP_HTTP_STATIC_USER);
+      boolean allowed =
+          aclManager.checkDAGViewAccess(UserGroupInformation.createRemoteUser(staticUser));
+      LOG.debug("Anonymous request checked as static user {}: access {}", staticUser,
+          allowed ? "granted" : "denied");
+      return allowed;
     }
-    return appContext.getAMACLManager().checkDAGViewAccess(callerUGI);
+    return aclManager.checkDAGViewAccess(callerUGI);
   }
 
   public boolean hasAccess() {
