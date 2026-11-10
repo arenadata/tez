@@ -17,6 +17,7 @@
  */
 package org.apache.tez.test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import java.io.File;
@@ -138,6 +139,50 @@ public class TestAM {
         portRange.getRangeStart() <= url.getPort());
 
     tezSession.stop();
+  }
+
+  @Test(timeout = 120000)
+  public void testAnonymousAccessToRunningDagWebService()
+      throws TezException, IOException, InterruptedException {
+    SleepProcessorConfig spConf = new SleepProcessorConfig(60000);
+
+    DAG dag = DAG.create("DAG-testAnonymousAccessToRunningDagWebService");
+    Vertex vertex = Vertex.create("SleepVertex",
+        ProcessorDescriptor.create(SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 1,
+        Resource.newInstance(1024, 1));
+    dag.addVertex(vertex);
+
+    TezConfiguration tezConf = new TezConfiguration(tezCluster.getConfig());
+    TezClient tezSession = TezClient.create("TezSleepProcessorAnonymousAccess", tezConf, false);
+    tezSession.start();
+    try {
+      DAGClient dagClient = tezSession.submitDAG(dag);
+
+      DAGStatus dagStatus = dagClient.getDAGStatus(null);
+      while (dagStatus.getState() != DAGStatus.State.RUNNING) {
+        assertTrue("DAG completed before the web service was queried: " + dagStatus.getState(),
+            !dagStatus.isCompleted());
+        Thread.sleep(500L);
+        dagStatus = dagClient.getDAGStatus(null);
+      }
+
+      String webUIAddress = dagClient.getWebUIAddress();
+      assertNotNull("getWebUIAddress should return TezAM's web UI address", webUIAddress);
+
+      // A direct request carries no proxy-user cookie, so the AM sees no remote user.
+      String url = webUIAddress + "/ui/ws/v2/tez/verticesInfo?dagID=1";
+      HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+      try {
+        assertEquals(url + " should be available to anonymous user", 200,
+            connection.getResponseCode());
+      } finally {
+        connection.disconnect();
+      }
+
+      dagClient.tryKillDAG();
+    } finally {
+      tezSession.stop();
+    }
   }
 
   private void checkAddress(String url) {

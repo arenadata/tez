@@ -19,11 +19,13 @@
 package org.apache.tez.dag.app.web;
 
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -46,7 +48,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.webapp.Controller;
 import org.apache.tez.common.counters.TezCounters;
 import org.apache.tez.common.security.ACLManager;
@@ -261,6 +265,105 @@ public class TestAMWebController {
     UserGroupInformation testUser = UserGroupInformation.createUserForTesting(
         "amUser", userGroups);
     Assert.assertEquals(true, AMWebController._hasAccess(testUser, mockAppContext));
+  }
+
+  private ACLManager createAclManager(String adminAcl, String viewAcl) {
+    Configuration conf = new Configuration(false);
+    conf.setBoolean(TezConfiguration.TEZ_AM_ACLS_ENABLED, true);
+    if (adminAcl != null) {
+      conf.set(YarnConfiguration.YARN_ADMIN_ACL, adminAcl);
+    }
+    if (viewAcl != null) {
+      conf.set(TezConfiguration.TEZ_AM_VIEW_ACLS, viewAcl);
+    }
+    return new ACLManager("amUser", conf);
+  }
+
+  @Test (timeout = 5000)
+  public void testAnonymousAccessInSimpleModeWithAdminAclWildcard() {
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager("*", null));
+
+    Assert.assertTrue(AMWebController._hasAccess(null, mockAppContext, false));
+  }
+
+  @Test (timeout = 5000)
+  public void testAnonymousAccessInSimpleModeWithViewAclWildcard() {
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager(null, "*"));
+    Assert.assertTrue(AMWebController._hasAccess(null, mockAppContext, false));
+
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager("admin", "*"));
+    Assert.assertTrue(AMWebController._hasAccess(null, mockAppContext, false));
+  }
+
+  @Test (timeout = 5000)
+  public void testAnonymousAccessInSimpleModeWithRestrictedAcls() {
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager(null, "someUser"));
+    Assert.assertFalse(AMWebController._hasAccess(null, mockAppContext, false));
+
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager("admin", null));
+    Assert.assertFalse(AMWebController._hasAccess(null, mockAppContext, false));
+  }
+
+  @Test (timeout = 5000)
+  public void testAnonymousAccessInSecureMode() {
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager("*", "*"));
+    Assert.assertFalse(AMWebController._hasAccess(null, mockAppContext, true));
+
+    Configuration conf = new Configuration(false);
+    conf.setBoolean(TezConfiguration.TEZ_AM_ACLS_ENABLED, false);
+    when(mockAppContext.getAMACLManager()).thenReturn(new ACLManager("amUser", conf));
+    Assert.assertTrue(AMWebController._hasAccess(null, mockAppContext, true));
+  }
+
+  @Test (timeout = 5000)
+  public void testAnonymousAccessUsesStaticUserFromAmConf() {
+    Configuration amConf = new Configuration(false);
+    amConf.set(CommonConfigurationKeys.HADOOP_HTTP_STATIC_USER, "webviewer");
+    when(mockAppContext.getAMConf()).thenReturn(amConf);
+
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager(null, "webviewer"));
+    Assert.assertTrue(AMWebController._hasAccess(null, mockAppContext, false));
+
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager(null, "otheruser"));
+    Assert.assertFalse(AMWebController._hasAccess(null, mockAppContext, false));
+  }
+
+  @Test (timeout = 5000)
+  public void testAnonymousAccessWithoutAmConfUsesDefaultStaticUser() {
+    when(mockAppContext.getAMConf()).thenReturn(null);
+
+    when(mockAppContext.getAMACLManager()).thenReturn(
+        createAclManager(null, CommonConfigurationKeys.DEFAULT_HADOOP_HTTP_STATIC_USER));
+    Assert.assertTrue(AMWebController._hasAccess(null, mockAppContext, false));
+
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager(null, "otheruser"));
+    Assert.assertFalse(AMWebController._hasAccess(null, mockAppContext, false));
+  }
+
+  @Test (timeout = 5000)
+  public void testGetVerticesInfoAllowsAnonymousWithAdminAclWildcard() throws Exception {
+    when(mockAppContext.getAMACLManager()).thenReturn(createAclManager("*", null));
+
+    Vertex mockVertex = createMockVertex("vertex_1422960590892_0007_42_00", VertexState.RUNNING,
+        0.33f, 3);
+    DAG mockDAG = mock(DAG.class);
+    doReturn(ImmutableMap.of(mockVertex.getVertexId(), mockVertex)).when(mockDAG).getVertices();
+
+    AMWebController spy = spy(new AMWebController(mockRequestContext, mockAppContext,
+        "TEST_HISTORY_URL"));
+    doReturn(mockRequest).when(spy).request();
+    doReturn(mockResponse).when(spy).response();
+    doNothing().when(spy).setCorsHeaders();
+    doReturn(null).when(mockRequest).getRemoteUser();
+    doReturn(mockDAG).when(spy).checkAndGetDAGFromRequest();
+    doReturn(ImmutableList.of()).when(spy).getVertexIDsFromRequest();
+    doReturn(new TreeMap<String, Set<String>>()).when(spy).getCounterListFromRequest();
+    doNothing().when(spy).renderJSON(any());
+
+    spy.getVerticesInfo();
+
+    verify(mockResponse, never()).sendError(anyInt(), anyString());
+    verify(spy).renderJSON(any());
   }
 
 
