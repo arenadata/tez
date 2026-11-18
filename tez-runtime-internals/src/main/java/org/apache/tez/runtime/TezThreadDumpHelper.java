@@ -136,7 +136,7 @@ public class TezThreadDumpHelper {
       if (!Thread.interrupted()) {
         try (FSDataOutputStream fsStream = fs.create(
             new Path(path, name + "_" + System.currentTimeMillis() + ".jstack"));
-            PrintStream printStream = new PrintStream(fsStream, false, StandardCharsets.UTF_8)) {
+            PrintStream printStream = new PrintStream(fsStream, false, StandardCharsets.UTF_8.name())) {
           printThreadInfo(printStream, name);
         } catch (IOException e) {
           throw new RuntimeException(e);
