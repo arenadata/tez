@@ -24,7 +24,7 @@
   <groupId>org.apache.tez</groupId>
   <artifactId>tez</artifactId>
   <packaging>pom</packaging>
-  <version>0.10.5.3-4.5.0-0</version>
+  <version>0.10.5.3-4.5.0-1</version>
   <name>tez</name>
 
   <licenses>
@@ -58,7 +58,7 @@
 
     <!--dependency versions in alphabetical order-->
     <asynchttpclient.version>2.16.1</asynchttpclient.version>
-    <bouncycastle.version>1.84</bouncycastle.version>
+    <bouncycastle.version>1.85</bouncycastle.version>
     <build-helper-maven-plugin.version>1.8</build-helper-maven-plugin.version>
     <buildnumber-maven-plugin.version>1.1</buildnumber-maven-plugin.version>
     <checkstyle.version>8.35</checkstyle.version>
@@ -73,7 +73,7 @@
     <findbugs-maven-plugin.version>3.0.5</findbugs-maven-plugin.version>
     <frontend-maven-plugin.version>1.15.0</frontend-maven-plugin.version>
     <guava.version>33.5.0-jre</guava.version>
-    <hadoop.version>3.4.3.2-4.4.0-1</hadoop.version>
+    <hadoop.version>3.4.3.3-4.5.0-1</hadoop.version>
     <jackson.version>2.18.10</jackson.version>
     <jdk.tools.version>1.8</jdk.tools.version>
     <jersey.version>1.19.4</jersey.version>

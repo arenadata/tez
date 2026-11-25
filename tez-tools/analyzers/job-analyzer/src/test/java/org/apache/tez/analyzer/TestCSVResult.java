@@ -58,7 +58,7 @@ public class TestCSVResult {
     result.addRecord(new String[]{"a", "b"});
     result.dumpToFile(out.toString());
 
-    String content = Files.readString(out, StandardCharsets.UTF_8);
+    String content = new String(Files.readAllBytes(out), StandardCharsets.UTF_8);
     Assert.assertEquals("h1,h2\na,b\n", content);
   }
 
@@ -118,7 +118,7 @@ public class TestCSVResult {
     result.addRecord(new String[]{"r"});
     result.dumpToFile(out.toString());
 
-    Assert.assertEquals("h\nr\n", Files.readString(out, StandardCharsets.UTF_8));
+    Assert.assertEquals("h\nr\n", new String(Files.readAllBytes(out), StandardCharsets.UTF_8));
   }
 
   @Test
